@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="colorPrimary">#FF5722</color>
+
+    <!-- You can also define a darker shade for colorPrimaryDark -->
+    <color name="colorPrimaryDark">#E64A19</color>
+
+    <!-- Accent color -->
+    <color name="colorAccent">#FFC107</color>
+    <color name="button_default_color">#ffa65a</color> <!-- Your current button color -->
+    <color name="button_pressed_color">#923304</color> <!-- A slightly darker shade -->
+</resources>

@@ -1,0 +1,23 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Background Circle (Grey) -->
+    <item android:id="@android:id/background">
+        <shape
+            android:shape="ring"
+            android:useLevel="false"
+            android:thickness="8dp">
+            <solid android:color="#B0B0B0"/> <!-- Grey color -->
+        </shape>
+    </item>
+
+    <!-- Progress Circle (Green) -->
+    <item android:id="@android:id/progress">
+        <shape
+            android:shape="ring"
+            android:useLevel="true"
+            android:thickness="8dp">
+            <solid android:color="#4CAF50"/> <!-- Green color -->
+        </shape>
+    </item>
+
+</layer-list>
