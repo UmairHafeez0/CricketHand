@@ -17,7 +17,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
         tools:targetApi="31">
-
+        <activity android:name=".TournamentListActivity" />
+        <activity android:name=".CreateTournamentActivity" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -27,13 +28,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".CalendarActivity" />
-        <activity android:name=".ScheduleActivity" />
-        <!-- Declare your service here -->
-        <service
-            android:name=".UtilityBotServiceA"
-            android:enabled="true"
-            android:exported="false" /> <!-- Not accessible by other apps -->
 
 
     </application>

@@ -3,10 +3,25 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="colorPrimary">#FF5722</color>
-
+    <color name="gold_light">#FFFDE7</color>
+    <color name="silver_light">#FAFAFA</color>
+    <color name="bronze_light">#FFF3E0</color>
     <!-- You can also define a darker shade for colorPrimaryDark -->
     <color name="colorPrimaryDark">#E64A19</color>
+    <color name="background">#F5F5F5</color>
+    <color name="primary">#2196F3</color>
+    <color name="primary_dark">#1976D2</color>
+    <color name="primary_text">#03A9F4</color>
+    <color name="secondary_text">#757575</color>
+    <color name="tab_text">#757575</color>
 
+    <!-- Card background colors -->
+    <color name="green_light">#E8F5E9</color>
+    <color name="blue_light">#E3F2FD</color>
+    <color name="orange_light">#FFF3E0</color>
+    <color name="purple_light">#F3E5F5</color>
+    <color name="red_light">#FFEBEE</color>
+    <color name="teal_light">#E0F2F1</color>
     <!-- Accent color -->
     <color name="colorAccent">#FFC107</color>
     <color name="button_default_color">#ffa65a</color> <!-- Your current button color -->

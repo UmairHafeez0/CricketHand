@@ -1,4 +1,4 @@
-package com.example.instacartDummy
+package com.example.handcricket
 
 import org.junit.Test
 
