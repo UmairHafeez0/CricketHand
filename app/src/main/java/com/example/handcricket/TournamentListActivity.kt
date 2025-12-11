@@ -1,5 +1,6 @@
 package com.example.handcricket
 
+import android.app.AlertDialog
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
@@ -19,6 +20,7 @@ class TournamentListActivity : AppCompatActivity() {
     private lateinit var fragmentContainer: View
     private val tournaments = mutableListOf<Tournament>()
     private lateinit var adapter: ArrayAdapter<String>
+    private lateinit var db: AppDatabase
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,6 +28,8 @@ class TournamentListActivity : AppCompatActivity() {
 
         listView = findViewById(R.id.listView)
         fragmentContainer = findViewById(R.id.fragment_container)
+
+        db = AppDatabase.getDatabase(this)
 
         adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf())
         listView.adapter = adapter
@@ -47,6 +51,12 @@ class TournamentListActivity : AppCompatActivity() {
                 .addToBackStack("tournament_details")
                 .commit()
         }
+
+        listView.setOnItemLongClickListener { _, _, position, _ ->
+            val tournament = tournaments[position]
+            showDeleteDialog(tournament)
+            true
+        }
     }
 
     override fun onBackPressed() {
@@ -61,9 +71,13 @@ class TournamentListActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        loadTournaments()
+    }
+
     private fun loadTournaments() {
         lifecycleScope.launch(Dispatchers.IO) {
-            val db = AppDatabase.getDatabase(this@TournamentListActivity)
             val data = db.tournamentDao().getAllTournaments()
             tournaments.clear()
             tournaments.addAll(data)
@@ -81,6 +95,43 @@ class TournamentListActivity : AppCompatActivity() {
                 adapter.clear()
                 adapter.addAll(names)
                 adapter.notifyDataSetChanged()
+            }
+        }
+    }
+
+    private fun showDeleteDialog(tournament: Tournament) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete Tournament")
+            .setMessage("Are you sure you want to delete '${tournament.name}'? All related data (teams, matches, player performances) will be permanently deleted.")
+            .setPositiveButton("Delete") { dialog, _ ->
+                deleteTournament(tournament.id)
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun deleteTournament(tournamentId: Int) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                db.tournamentDao().deleteTournamentWithAllData(tournamentId)
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@TournamentListActivity,
+                        "Tournament deleted successfully",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    loadTournaments() // Refresh the list
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@TournamentListActivity,
+                        "Error deleting tournament: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }

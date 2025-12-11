@@ -1,4 +1,3 @@
-// ScheduleFragment.kt
 package com.example.handcricket
 
 import android.os.Bundle
@@ -51,13 +50,18 @@ class ScheduleFragment : Fragment() {
             val matches = db.tournamentDao().getMatches(tournamentId)
             val teams = db.tournamentDao().getTeams(tournamentId).associateBy { it.id }
 
+            // Get match results for player of match
+            val matchResults = db.tournamentDao().getMatchResults(tournamentId)
+                .associateBy { it.matchId }
+
             val matchList = matches.map { match ->
                 MatchItem(
-                    match.id,
-                    teams[match.teamAId]?.name ?: "Team A",
-                    teams[match.teamBId]?.name ?: "Team B",
-                    match.matchType,
-                    match.winnerTeamId?.let { teams[it]?.name } ?: "Not Played"
+                    id = match.id,
+                    teamA = teams[match.teamAId]?.name ?: "Team A",
+                    teamB = teams[match.teamBId]?.name ?: "Team B",
+                    matchType = match.matchType,
+                    result = match.winnerTeamId?.let { teams[it]?.name } ?: "Not Played",
+                    playerOfMatch = matchResults[match.id]?.playerOfMatch ?: match.playerOfMatch ?: ""
                 )
             }
 
@@ -88,5 +92,6 @@ data class MatchItem(
     val teamA: String,
     val teamB: String,
     val matchType: String,
-    val result: String
+    val result: String,
+    val playerOfMatch: String
 )

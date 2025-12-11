@@ -1,4 +1,3 @@
-// ImportFragment.kt (Complete implementation)
 package com.example.handcricket
 
 import android.app.AlertDialog
@@ -9,7 +8,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.RadioButton
 import android.widget.TextView
@@ -23,8 +21,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.text.SimpleDateFormat
-import java.util.*
 
 class ImportFragment : Fragment() {
 
@@ -107,14 +103,15 @@ class ImportFragment : Fragment() {
                     // Parse CSV data
                     parsedData = parseMatchDataFromCSV(lines)
 
-                    // Extract team names from CSV
-                    extractTeamNamesFromCSV(lines)
-
                     withContext(Dispatchers.Main) {
-                        binding.tvStatus.text =
-                            "CSV parsed successfully!\n" +
-                                    "Found ${parsedData!!.batters.size} batters and ${parsedData!!.bowlers.size} bowlers\n" +
-                                    "Teams detected: $csvTeam1Name vs $csvTeam2Name"
+                        if (parsedData != null) {
+                            binding.tvStatus.text =
+                                "CSV parsed successfully!\n" +
+                                        "Found ${parsedData!!.batters.size} batters and ${parsedData!!.bowlers.size} bowlers\n" +
+                                        "Teams detected: $csvTeam1Name vs $csvTeam2Name"
+                        } else {
+                            binding.tvStatus.text = "Error: Could not parse CSV file"
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -133,26 +130,36 @@ class ImportFragment : Fragment() {
         var section = ""
         var currentTeam = ""
 
+        // Reset team names
+        csvTeam1Name = ""
+        csvTeam2Name = ""
+
+        // First pass: Extract team names and scores from batting headers with scores
+        for (line in lines) {
+            if (line.contains("Batting") && line.contains("/") && line.contains("(")) {
+                // This is a batting header with score line like "Babar Azam Batting,,,,,186 / 10 (9.1)"
+                val teamMatch = Regex("""(.+?) Batting""").find(line)
+                val team = teamMatch?.groupValues?.get(1)?.trim() ?: ""
+
+                // Extract score from the line
+                val scoreMatch = Regex("""(\d+)\s*/\s*(\d+)\s*\(([\d\.]+)\)""").find(line)
+                val score = scoreMatch?.value?.trim() ?: ""
+
+                if (matchInfo.team1Name.isEmpty()) {
+                    matchInfo.team1Name = team
+                    matchInfo.team1Score = score
+                    csvTeam1Name = team
+                } else if (matchInfo.team2Name.isEmpty() && team != matchInfo.team1Name) {
+                    matchInfo.team2Name = team
+                    matchInfo.team2Score = score
+                    csvTeam2Name = team
+                }
+            }
+        }
+
+        // Second pass: Parse player data and other match info
         for (line in lines) {
             when {
-                line.contains("Batting") -> {
-                    section = "batting"
-                    // Extract team name from batting header
-                    val teamMatch = Regex("""(.+?) Batting""").find(line)
-                    currentTeam = teamMatch?.groupValues?.get(1)?.trim() ?: "Team"
-                }
-                line.contains("Bowling") -> {
-                    section = "bowling"
-                    // Extract team name from bowling header
-                    val teamMatch = Regex("""(.+?) Bowling""").find(line)
-                    currentTeam = teamMatch?.groupValues?.get(1)?.trim() ?: "Team"
-                }
-                line.contains("Batter ID") -> continue
-                line.contains("Bowler ID") -> continue
-                line.contains("/") && line.contains("(") -> {
-                    // This is a score line like "186 / 10 (9.1)"
-                    parseScoreLine(line, section, currentTeam, matchInfo)
-                }
                 line.contains("won the game by") -> {
                     parseResultLine(line, matchInfo)
                 }
@@ -162,13 +169,35 @@ class ImportFragment : Fragment() {
                 line.contains("Played on") -> {
                     parseDateLine(line, matchInfo)
                 }
+                line.contains(" Batting,") -> {
+                    section = "batting"
+                    // Extract team name from batting header without score
+                    val teamMatch = Regex("""(.+?) Batting,""").find(line)
+                    currentTeam = teamMatch?.groupValues?.get(1)?.trim() ?: "Team"
+
+                    // Update team names if not already set
+                    if (csvTeam1Name.isEmpty()) {
+                        csvTeam1Name = currentTeam
+                    } else if (csvTeam2Name.isEmpty() && currentTeam != csvTeam1Name) {
+                        csvTeam2Name = currentTeam
+                    }
+                }
+                line.contains(" Bowling") -> {
+                    section = "bowling"
+                    // Extract team name from bowling header
+                    val teamMatch = Regex("""(.+?) Bowling,""").find(line)
+                    currentTeam = teamMatch?.groupValues?.get(1)?.trim() ?: "Team"
+                }
+                line.contains("Batter ID") -> continue
+                line.contains("Bowler ID") -> continue
+                line.contains("Fall of Wickets") -> continue
                 line.isBlank() -> continue
                 else -> {
                     val parts = line.split(",")
-                    if (section == "batting" && parts.size >= 7) {
+                    if (section == "batting" && parts.size >= 7 && parts[0].trim().isNotEmpty()) {
                         val batter = parseBatterData(parts, currentTeam)
                         batters.add(batter)
-                    } else if (section == "bowling" && parts.size >= 6) {
+                    } else if (section == "bowling" && parts.size >= 6 && parts[0].trim().isNotEmpty()) {
                         val bowler = parseBowlerData(parts, currentTeam)
                         bowlers.add(bowler)
                     }
@@ -221,26 +250,6 @@ class ImportFragment : Fragment() {
         }
     }
 
-    private fun parseScoreLine(line: String, section: String, team: String, matchInfo: MatchInfo) {
-        val regex = """(\d+)\s*/\s*(\d+)\s*\(([\d\.]+)\)""".toRegex()
-        val match = regex.find(line)
-        if (match != null) {
-            val runs = match.groupValues[1].toInt()
-            val wickets = match.groupValues[2].toInt()
-            val overs = match.groupValues[3]
-
-            if (section == "batting") {
-                if (matchInfo.team1Name.isEmpty()) {
-                    matchInfo.team1Name = team
-                    matchInfo.team1Score = "$runs/$wickets ($overs)"
-                } else {
-                    matchInfo.team2Name = team
-                    matchInfo.team2Score = "$runs/$wickets ($overs)"
-                }
-            }
-        }
-    }
-
     private fun parseResultLine(line: String, matchInfo: MatchInfo) {
         val winnerRegex = """(.+?) won the game by""".toRegex()
         val winnerMatch = winnerRegex.find(line)
@@ -257,28 +266,6 @@ class ImportFragment : Fragment() {
         val dateRegex = """Played on (.+)""".toRegex()
         val dateMatch = dateRegex.find(line)
         matchInfo.date = dateMatch?.groupValues?.get(1)?.trim() ?: ""
-    }
-
-    private fun extractTeamNamesFromCSV(lines: List<String>) {
-        var team1 = ""
-        var team2 = ""
-
-        for (line in lines) {
-            if (line.contains("Batting")) {
-                val match = Regex("""(.+?) Batting""").find(line)
-                val team = match?.groupValues?.get(1)?.trim()
-                if (team != null) {
-                    if (team1.isEmpty()) {
-                        team1 = team
-                    } else if (team2.isEmpty() && team != team1) {
-                        team2 = team
-                    }
-                }
-            }
-        }
-
-        csvTeam1Name = team1
-        csvTeam2Name = team2
     }
 
     private fun loadMatches() {
@@ -384,30 +371,55 @@ class ImportFragment : Fragment() {
                     else -> null
                 }
 
-                // Update match with winner
+                // Update match with winner and player of match
                 if (winnerTeamId != null) {
                     db.tournamentDao().updateMatchWinner(matchId, winnerTeamId)
                 }
+                if (parsedData.matchInfo.playerOfMatch.isNotEmpty()) {
+                    db.tournamentDao().updatePlayerOfMatch(matchId, parsedData.matchInfo.playerOfMatch)
+                }
 
-                // Save match result
-                val matchResult = MatchResult(
-                    matchId = matchId,
-                    tournamentId = tournamentId,
-                    team1Id = team1Id,
-                    team2Id = team2Id,
-                    team1Score = parsedData.matchInfo.team1Score,
-                    team2Score = parsedData.matchInfo.team2Score,
-                    winnerTeamId = winnerTeamId ?: -1,
-                    playerOfMatch = parsedData.matchInfo.playerOfMatch,
-                    date = parsedData.matchInfo.date,
-                    matchType = matches.find { it.id == matchId }?.matchType ?: "Group"
-                )
-                db.tournamentDao().insertMatchResult(matchResult)
+                // Check if match result already exists
+                val existingResult = db.tournamentDao().getMatchResult(matchId)
+                val matchResult = if (existingResult == null) {
+                    MatchResult(
+                        matchId = matchId,
+                        tournamentId = tournamentId,
+                        team1Id = team1Id,
+                        team2Id = team2Id,
+                        team1Score = parsedData.matchInfo.team1Score,
+                        team2Score = parsedData.matchInfo.team2Score,
+                        winnerTeamId = winnerTeamId ?: -1,
+                        playerOfMatch = parsedData.matchInfo.playerOfMatch,
+                        date = parsedData.matchInfo.date,
+                        matchType = matches.find { it.id == matchId }?.matchType ?: "Group"
+                    )
+                } else {
+                    // Update existing result
+                    existingResult.copy(
+                        team1Score = parsedData.matchInfo.team1Score,
+                        team2Score = parsedData.matchInfo.team2Score,
+                        winnerTeamId = winnerTeamId ?: existingResult.winnerTeamId,
+                        playerOfMatch = parsedData.matchInfo.playerOfMatch,
+                        date = parsedData.matchInfo.date
+                    )
+                }
 
-                // Save player performances
-                val playerPerformances = mutableListOf<PlayerPerformance>()
+                // Save or update match result
+                if (existingResult == null) {
+                    db.tournamentDao().insertMatchResult(matchResult)
+                } else {
+                    db.tournamentDao().updateMatchResult(matchResult)
+                }
 
-                // Process batters
+                // Get existing performances for this match and create a map for quick lookup
+                val existingPerformances = db.tournamentDao().getPlayerPerformancesByMatch(matchId)
+                val existingPerformanceMap = existingPerformances.associateBy { it.playerName }
+
+                // First, process all players to create/update records
+                val allPlayers = mutableMapOf<String, PlayerDataForUpdate>()
+
+                // Add batters to the map
                 parsedData.batters.forEach { batter ->
                     val teamId = when (batter.team) {
                         csvTeam1Name -> team1Id
@@ -415,60 +427,173 @@ class ImportFragment : Fragment() {
                         else -> team1Id
                     }
 
-                    playerPerformances.add(PlayerPerformance(
-                        matchId = matchId,
-                        tournamentId = tournamentId,
+                    allPlayers[batter.name] = PlayerDataForUpdate(
+                        name = batter.name,
                         teamId = teamId,
-                        playerName = batter.name,
-                        role = "batter",
-                        runs = batter.runs,
-                        balls = batter.balls,
-                        fours = batter.fours,
-                        sixes = batter.sixes,
-                        strikeRate = batter.strikeRate,
-                        isOut = batter.isOut,
-                        date = parsedData.matchInfo.date
-                    ))
+                        batterData = batter,
+                        bowlerData = null
+                    )
                 }
 
-                // Process bowlers
+                // Add/update bowlers in the map (some players might be both batter and bowler)
                 parsedData.bowlers.forEach { bowler ->
                     val teamId = when (bowler.team) {
-                        csvTeam1Name -> team1Id
-                        csvTeam2Name -> team2Id
-                        else -> team2Id // Bowlers are from opposite team
+                        csvTeam1Name -> team2Id  // Bowlers bowl for opposite team
+                        csvTeam2Name -> team1Id
+                        else -> team2Id
                     }
 
-                    playerPerformances.add(PlayerPerformance(
-                        matchId = matchId,
-                        tournamentId = tournamentId,
-                        teamId = teamId,
-                        playerName = bowler.name,
-                        role = "bowler",
-                        wickets = bowler.wickets,
-                        overs = bowler.overs,
-                        runsConceded = bowler.runs,
-                        economy = bowler.economy,
-                        date = parsedData.matchInfo.date
-                    ))
+                    if (allPlayers.containsKey(bowler.name)) {
+                        // Player already exists as batter, add bowler data
+                        allPlayers[bowler.name] = allPlayers[bowler.name]!!.copy(bowlerData = bowler)
+                    } else {
+                        // New player, only bowler data
+                        allPlayers[bowler.name] = PlayerDataForUpdate(
+                            name = bowler.name,
+                            teamId = teamId,
+                            batterData = null,
+                            bowlerData = bowler
+                        )
+                    }
                 }
 
-                // Insert all performances
-                db.tournamentDao().insertPlayerPerformances(playerPerformances)
+                // Now process each player, creating or updating their performance
+                var updatedCount = 0
+                var insertedCount = 0
+
+                allPlayers.values.forEach { playerData ->
+                    val existing = existingPerformanceMap[playerData.name]
+
+                    if (existing != null) {
+                        // Update existing performance
+                        val updatedPerformance = mergePlayerPerformance(
+                            existing = existing,
+                            batter = playerData.batterData,
+                            bowler = playerData.bowlerData,
+                            date = parsedData.matchInfo.date
+                        )
+                        db.tournamentDao().updatePlayerPerformance(updatedPerformance)
+                        updatedCount++
+                    } else {
+                        // Create new performance
+                        val newPerformance = createPlayerPerformance(
+                            matchId = matchId,
+                            tournamentId = tournamentId,
+                            teamId = playerData.teamId,
+                            playerName = playerData.name,
+                            batter = playerData.batterData,
+                            bowler = playerData.bowlerData,
+                            date = parsedData.matchInfo.date
+                        )
+                        db.tournamentDao().insertPlayerPerformance(newPerformance)
+                        insertedCount++
+                    }
+                }
 
                 withContext(Dispatchers.Main) {
                     binding.tvStatus.text =
                         "✅ Data imported successfully!\n" +
                                 "• Match result saved\n" +
-                                "• ${playerPerformances.size} player performances saved\n" +
+                                "• $updatedCount performances updated\n" +
+                                "• $insertedCount performances added\n" +
                                 "• Winner: ${parsedData.matchInfo.winner}"
                 }
 
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    binding.tvStatus.text = "Error importing data: ${e.message}"
+                    binding.tvStatus.text = "Error importing data: ${e.message}\n${e.stackTraceToString()}"
                 }
             }
+        }
+    }
+
+    private fun mergePlayerPerformance(
+        existing: PlayerPerformance,
+        batter: BatterData?,
+        bowler: BowlerData?,
+        date: String
+    ): PlayerPerformance {
+        val newRuns = (existing.runs + (batter?.runs ?: 0))
+        val newBalls = (existing.balls + (batter?.balls ?: 0))
+        val newStrikeRate = if (newBalls > 0) {
+            (newRuns.toFloat() / newBalls) * 100
+        } else {
+            existing.strikeRate
+        }
+
+        val newOvers = (existing.overs + (bowler?.overs ?: 0f))
+        val newRunsConceded = (existing.runsConceded + (bowler?.runs ?: 0))
+        val newEconomy = if (newOvers > 0) {
+            newRunsConceded.toFloat() / newOvers
+        } else {
+            existing.economy
+        }
+
+        return existing.copy(
+            // Batting stats
+            runs = newRuns,
+            balls = newBalls,
+            fours = (existing.fours + (batter?.fours ?: 0)),
+            sixes = (existing.sixes + (batter?.sixes ?: 0)),
+            strikeRate = newStrikeRate,
+            isOut = batter?.isOut ?: existing.isOut,
+
+            // Bowling stats
+            wickets = (existing.wickets + (bowler?.wickets ?: 0)),
+            overs = newOvers,
+            runsConceded = newRunsConceded,
+            economy = newEconomy,
+
+            // Determine role
+            role = determineRole(batter, bowler, existing.role),
+
+            date = date
+        )
+    }
+
+    private fun createPlayerPerformance(
+        matchId: Int,
+        tournamentId: Int,
+        teamId: Int,
+        playerName: String,
+        batter: BatterData?,
+        bowler: BowlerData?,
+        date: String
+    ): PlayerPerformance {
+        val strikeRate = if (batter?.balls ?: 0 > 0) {
+            ((batter?.runs ?: 0).toFloat() / (batter?.balls ?: 1)) * 100
+        } else 0f
+
+        val economy = if (bowler?.overs ?: 0f > 0) {
+            (bowler?.runs ?: 0).toFloat() / (bowler?.overs ?: 1f)
+        } else 0f
+
+        return PlayerPerformance(
+            matchId = matchId,
+            tournamentId = tournamentId,
+            teamId = teamId,
+            playerName = playerName,
+            role = determineRole(batter, bowler, "player"),
+            runs = batter?.runs ?: 0,
+            balls = batter?.balls ?: 0,
+            fours = batter?.fours ?: 0,
+            sixes = batter?.sixes ?: 0,
+            wickets = bowler?.wickets ?: 0,
+            overs = bowler?.overs ?: 0f,
+            runsConceded = bowler?.runs ?: 0,
+            economy = economy,
+            strikeRate = strikeRate,
+            isOut = batter?.isOut ?: false,
+            date = date
+        )
+    }
+
+    private fun determineRole(batter: BatterData?, bowler: BowlerData?, existingRole: String): String {
+        return when {
+            batter != null && bowler != null -> "all-rounder"
+            batter != null -> "batter"
+            bowler != null -> "bowler"
+            else -> existingRole
         }
     }
 
@@ -525,4 +650,12 @@ data class BowlerData(
     val runs: Int,
     val wickets: Int,
     val economy: Float
+)
+
+// Helper data class for player updates
+data class PlayerDataForUpdate(
+    val name: String,
+    val teamId: Int,
+    val batterData: BatterData?,
+    val bowlerData: BowlerData?
 )

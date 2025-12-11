@@ -1,10 +1,8 @@
-// MatchesAdapter.kt
 package com.example.handcricket
 
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -18,7 +16,22 @@ class MatchesAdapter : ListAdapter<MatchItem, MatchesAdapter.MatchViewHolder>(Di
         fun bind(match: MatchItem) {
             binding.tvMatchTitle.text = "${match.teamA} vs ${match.teamB}"
             binding.tvMatchType.text = match.matchType
-            binding.tvResult.text = "Result: ${match.result}"
+
+            // Show result and player of match
+            if (match.result == "Not Played") {
+                binding.tvResult.text = "Result: Not Played"
+                binding.tvPlayerOfMatch.visibility = View.GONE
+            } else {
+                binding.tvResult.text = "Winner: ${match.result}"
+
+                // Show Player of the Match if available
+                if (match.playerOfMatch.isNotEmpty()) {
+                    binding.tvPlayerOfMatch.visibility = View.VISIBLE
+                    binding.tvPlayerOfMatch.text = "Player of Match: ${match.playerOfMatch}"
+                } else {
+                    binding.tvPlayerOfMatch.visibility = View.GONE
+                }
+            }
 
             // Set background color based on match type
             val bgColor = when (match.matchType) {

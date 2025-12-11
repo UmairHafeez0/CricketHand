@@ -25,7 +25,7 @@ data class PlayerPerformance(
     val tournamentId: Int,
     val teamId: Int,
     val playerName: String,
-    val role: String, // "batter" or "bowler"
+    val role: String, // "batter" or "bowler" or "all-rounder"
     val runs: Int = 0,
     val balls: Int = 0,
     val fours: Int = 0,
@@ -61,7 +61,8 @@ data class Match(
     val teamAId: Int,
     val teamBId: Int,
     val matchType: String, // "Group", "Semi", "Final", "RoundRobin"
-    val winnerTeamId: Int? = null
+    val winnerTeamId: Int? = null,
+    val playerOfMatch: String? = null
 )
 
 @Dao
@@ -82,6 +83,9 @@ interface TournamentDao {
     @Insert
     suspend fun insertPlayerPerformance(performance: PlayerPerformance): Long
 
+    @Update
+    suspend fun updatePlayerPerformance(performance: PlayerPerformance)
+
     @Insert
     suspend fun insertPlayerPerformances(performances: List<PlayerPerformance>)
 
@@ -91,8 +95,14 @@ interface TournamentDao {
     @Query("SELECT * FROM player_performance WHERE matchId = :matchId")
     suspend fun getPlayerPerformancesByMatch(matchId: Int): List<PlayerPerformance>
 
+    @Query("SELECT * FROM player_performance WHERE matchId = :matchId AND playerName = :playerName")
+    suspend fun getPlayerPerformance(matchId: Int, playerName: String): PlayerPerformance?
+
     @Insert
     suspend fun insertMatchResult(result: MatchResult): Long
+
+    @Update
+    suspend fun updateMatchResult(result: MatchResult)
 
     @Query("SELECT * FROM match_results WHERE matchId = :matchId")
     suspend fun getMatchResult(matchId: Int): MatchResult?
@@ -105,6 +115,37 @@ interface TournamentDao {
 
     @Query("UPDATE matches SET winnerTeamId = :winnerId WHERE id = :matchId")
     suspend fun updateMatchWinner(matchId: Int, winnerId: Int)
+
+    @Query("UPDATE matches SET playerOfMatch = :playerName WHERE id = :matchId")
+    suspend fun updatePlayerOfMatch(matchId: Int, playerName: String)
+
+    @Query("SELECT * FROM Tournament WHERE id = :tournamentId")
+    suspend fun getTournamentById(tournamentId: Int): Tournament?
+
+    // DELETE OPERATIONS
+    @Query("DELETE FROM Tournament WHERE id = :tournamentId")
+    suspend fun deleteTournament(tournamentId: Int)
+
+    @Query("DELETE FROM Team WHERE tournamentId = :tournamentId")
+    suspend fun deleteTeams(tournamentId: Int)
+
+    @Query("DELETE FROM matches WHERE tournamentId = :tournamentId")
+    suspend fun deleteMatches(tournamentId: Int)
+
+    @Query("DELETE FROM player_performance WHERE tournamentId = :tournamentId")
+    suspend fun deletePlayerPerformances(tournamentId: Int)
+
+    @Query("DELETE FROM match_results WHERE tournamentId = :tournamentId")
+    suspend fun deleteMatchResults(tournamentId: Int)
+
+    // Helper method to delete all tournament data in transaction
+    suspend fun deleteTournamentWithAllData(tournamentId: Int) {
+        deleteMatchResults(tournamentId)
+        deletePlayerPerformances(tournamentId)
+        deleteMatches(tournamentId)
+        deleteTeams(tournamentId)
+        deleteTournament(tournamentId)
+    }
 }
 
 @Database(
@@ -113,9 +154,10 @@ interface TournamentDao {
         Team::class,
         Match::class,
         PlayerPerformance::class,
-        MatchResult::class  // ADD THIS LINE
+        MatchResult::class
     ],
-    version = 4  // INCREMENT VERSION
+    version = 7,  // INCREMENTED VERSION
+    exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun tournamentDao(): TournamentDao
@@ -131,7 +173,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "hand_cricket_db"
                 )
-                    .fallbackToDestructiveMigration()  // This will recreate the database with new tables
+                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance
