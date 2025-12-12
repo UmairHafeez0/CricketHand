@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingVertical="12dp"
+    android:gravity="center_vertical">
+
+    <!-- Rank Badge -->
+    <TextView
+        android:id="@+id/tvRank"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:gravity="center"
+        android:text="1"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:background="@drawable/bg_rank_circle"
+        app:layout_constraintCircle="@+id/rankCircle" />
+
+    <!-- Player Info -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="12dp">
+
+        <TextView
+            android:id="@+id/tvPlayerName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Player Name"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="@color/gray_800"
+            android:ellipsize="end"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/tvPlayerDetails"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Player details"
+            android:textSize="12sp"
+            android:textColor="@color/gray_600"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+    <!-- Stats Value -->
+    <TextView
+        android:id="@+id/tvPlayerValue"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="450 runs"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="@color/purple_200"
+        android:background="@drawable/bg_stat_value"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="4dp" />
+
+</LinearLayout>

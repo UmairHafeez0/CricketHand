@@ -1,28 +1,114 @@
 package com.example.handcricket
 
+
+import android.content.Context
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.LinearLayout
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.example.handcricket.data.AppDatabase
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.example.handcricket.databinding.FragmentStatsBinding
+import com.example.handcricket.databinding.ItemStatCategoryBinding
+import com.example.handcricket.databinding.ItemTopPlayerBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import kotlin.math.roundToInt
+
+data class TeamStats(
+    val name: String,
+    var matches: Int = 0,
+    var wins: Int = 0,
+    var losses: Int = 0,
+    var runsFor: Int = 0,
+    var oversFaced: Double = 0.0,
+    var runsAgainst: Int = 0,
+    var oversBowled: Double = 0.0,
+    var nrr: Double = 0.0
+)
+
+data class PlayerStats(
+    val name: String,
+    var runs: Int = 0,
+    var balls: Int = 0,
+    var fours: Int = 0,
+    var sixes: Int = 0,
+    var highestScore: Int = 0,
+    var centuries: Int = 0,
+    var halfCenturies: Int = 0,
+    var wickets: Int = 0,
+    var overs: Double = 0.0,
+    var runsGiven: Int = 0,
+    var bestBowlingWickets: Int = 0,
+    var bestBowlingRuns: Int = 0,
+    var matches: Int = 0,
+    var strikeRate: Double = 0.0,
+    var battingAverage: Double = 0.0,
+    var bowlingAverage: Double = 0.0,
+    var economy: Double = 0.0,
+    var fantasyPoints: Int = 0
+)
+
+data class MatchPerformance(
+    val player: String,
+    val matchId: Int,
+    val runs: Int,
+    val balls: Int,
+    val fours: Int,
+    val sixes: Int,
+    val wickets: Int,
+    val overs: Double,
+    val runsConceded: Int
+)
+
+data class StatCategory(
+    val title: String,
+    val description: String,
+    val topPlayers: List<TopPlayer>
+)
+
+data class TopPlayer(
+    val name: String,
+    val value: String,
+    val details: String
+)
 
 class StatsFragment : Fragment() {
+    companion object {
+        fun newInstance(files: List<Uri>, useSample: Boolean = false): StatsFragment {
+            return StatsFragment().apply {
+                arguments = Bundle().apply {
+                    putParcelableArrayList("files", ArrayList(files))
+                    putBoolean("useSample", useSample)
+                }
+            }
+        }
+    }
 
     private var _binding: FragmentStatsBinding? = null
     private val binding get() = _binding!!
-    private var tournamentId: Int = 0
+    private lateinit var adapter: StatsAdapter
+
+    private val teamMap = mapOf(
+        "Saim" to "Pakistan",
+        "Virat" to "India",
+        "Kohli" to "India",
+        "David Warner" to "Australia",
+        "Jos Buttler" to "England",
+        "Quinton" to "South Africa",
+        "Finn Allen" to "New Zealand"
+    )
+
+    private val teams = mutableMapOf<String, TeamStats>()
+    private val players = mutableMapOf<String, PlayerStats>()
+    private val matchPerformances = mutableListOf<MatchPerformance>()
+    private val statCategories = mutableListOf<StatCategory>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -35,422 +121,487 @@ class StatsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        tournamentId = arguments?.getInt("TOURNAMENT_ID") ?: 0
 
-        // Initialize SwipeRefreshLayout from the binding
-        binding.swipeRefreshLayout.setOnRefreshListener {
-            loadAllStats()
+        binding.progressBar.visibility = View.VISIBLE
+
+        adapter = StatsAdapter()
+        binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        binding.recyclerView.adapter = adapter
+
+        GlobalScope.launch(Dispatchers.IO) {
+            val files = arguments?.getParcelableArrayList<Uri>("files") ?: emptyList()
+            val useSample = arguments?.getBoolean("useSample") ?: false
+
+            if (useSample) {
+                loadSampleData()
+            } else if (files.isNotEmpty()) {
+                processCSVFiles(files)
+            }
+
+            calculateStatistics()
+
+            withContext(Dispatchers.Main) {
+                binding.progressBar.visibility = View.GONE
+                updateUI()
+            }
         }
-        binding.swipeRefreshLayout.setColorSchemeResources(
-            android.R.color.holo_blue_bright,
-            android.R.color.holo_green_light,
-            android.R.color.holo_orange_light,
-            android.R.color.holo_red_light
+    }
+
+    private suspend fun processCSVFiles(files: List<Uri>) {
+        var matchId = 0
+
+        files.forEach { uri ->
+            matchId++
+            try {
+                val content = readUriContent(requireContext(), uri)
+                processMatch(content, matchId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun readUriContent(context: Context, uri: Uri): String {
+        return context.contentResolver.openInputStream(uri)?.use { inputStream ->
+            BufferedReader(InputStreamReader(inputStream)).readText()
+        } ?: ""
+    }
+
+    private fun processMatch(content: String, matchId: Int) {
+        val lines = content.trim().split("\n")
+
+        // Extract team names
+        val team1Index = lines.indexOfFirst { "Batting" in it && "Computer Batting" !in it }
+        val team2Index = lines.indexOfFirst { "Computer Batting" in it }
+
+        val team1Name = detectTeamFromInnings(lines, team1Index)
+        val team2Name = detectTeamFromInnings(lines, team2Index)
+
+        addTeam(team1Name)
+        addTeam(team2Name)
+
+        // Extract scores
+        val team1Runs = extractRuns(lines[team1Index])
+        val team2Runs = extractRuns(lines[team2Index])
+        val team1Overs = extractOvers(lines[team1Index])
+        val team2Overs = extractOvers(lines[team2Index])
+
+        // Determine winner
+        val winLine = lines.firstOrNull { "won the game" in it } ?: ""
+        val (winner, loser) = if ("Computer won" in winLine) {
+            Pair(team2Name, team1Name)
+        } else {
+            Pair(team1Name, team2Name)
+        }
+
+        // Update team stats
+        teams[team1Name]?.let { team ->
+            team.matches++
+            if (winner == team1Name) team.wins++ else team.losses++
+            team.runsFor += team1Runs
+            team.oversFaced += team1Overs
+            team.runsAgainst += team2Runs
+            team.oversBowled += team2Overs
+        }
+
+        teams[team2Name]?.let { team ->
+            team.matches++
+            if (winner == team2Name) team.wins++ else team.losses++
+            team.runsFor += team2Runs
+            team.oversFaced += team2Overs
+            team.runsAgainst += team1Runs
+            team.oversBowled += team1Overs
+        }
+
+        // Process player batting
+        processBattingStats(lines, team1Index + 2, matchId)
+        processBattingStats(lines, team2Index + 2, matchId)
+
+        // Process bowling stats
+        val bowlIndices = lines.mapIndexedNotNull { index, line ->
+            if ("Bowler ID,Bowler Name,Overs,Runs,Wickets,Economy" in line) index else null
+        }
+
+        bowlIndices.forEach { headerIndex ->
+            for (j in headerIndex + 1..headerIndex + 6) {
+                if (j >= lines.size) break
+                val row = lines[j].split(",")
+                if (row.size >= 5) {
+                    val name = row[1].trim()
+                    val overs = row[2].toDoubleOrNull() ?: 0.0
+                    val runsConceded = row[3].toIntOrNull() ?: 0
+                    val wickets = row[4].toIntOrNull() ?: 0
+
+                    updatePlayer(
+                        name = name,
+                        runs = 0,
+                        balls = 0,
+                        fours = 0,
+                        sixes = 0,
+                        wickets = wickets,
+                        overs = overs,
+                        runsConceded = runsConceded,
+                        matchId = matchId
+                    )
+                }
+            }
+        }
+    }
+
+    private fun processBattingStats(lines: List<String>, startIndex: Int, matchId: Int) {
+        for (i in startIndex until startIndex + 11) {
+            if (i >= lines.size) break
+            val row = lines[i].split(",")
+            if (row.size < 6) continue
+
+            val name = row[1].split("(")[0].trim()
+            val runs = row[2].toIntOrNull() ?: 0
+            val balls = row[3].toIntOrNull() ?: 0
+            val fours = row[4].toIntOrNull() ?: 0
+            val sixes = row[5].toIntOrNull() ?: 0
+
+            updatePlayer(
+                name = name,
+                runs = runs,
+                balls = balls,
+                fours = fours,
+                sixes = sixes,
+                matchId = matchId
+            )
+        }
+    }
+
+    private fun detectTeamFromInnings(lines: List<String>, start: Int): String {
+        val block = lines.subList(start, minOf(start + 60, lines.size))
+            .joinToString("\n").lowercase()
+
+        teamMap.forEach { (key, team) ->
+            if (key.lowercase() in block) return team
+        }
+        return "Computer"
+    }
+
+    private fun addTeam(name: String) {
+        if (!teams.containsKey(name)) {
+            teams[name] = TeamStats(name)
+        }
+    }
+
+    private fun updatePlayer(
+        name: String,
+        runs: Int,
+        balls: Int,
+        fours: Int,
+        sixes: Int,
+        wickets: Int = 0,
+        overs: Double = 0.0,
+        runsConceded: Int = 0,
+        matchId: Int? = null
+    ) {
+        var player = players[name]
+        if (player == null) {
+            player = PlayerStats(name)
+            players[name] = player
+        }
+
+        // Update batting stats
+        player.runs += runs
+        player.balls += balls
+        player.fours += fours
+        player.sixes += sixes
+
+        if (runs > player.highestScore) {
+            player.highestScore = runs
+        }
+        if (runs >= 100) {
+            player.centuries++
+        } else if (runs >= 50) {
+            player.halfCenturies++
+        }
+
+        // Update bowling stats
+        player.wickets += wickets
+        player.overs += overs
+        player.runsGiven += runsConceded
+
+        if (wickets > 0) {
+            if (wickets > player.bestBowlingWickets ||
+                (wickets == player.bestBowlingWickets && runsConceded < player.bestBowlingRuns)) {
+                player.bestBowlingWickets = wickets
+                player.bestBowlingRuns = runsConceded
+            }
+        }
+
+        player.matches++
+
+        // Store match performance
+        if (matchId != null) {
+            matchPerformances.add(
+                MatchPerformance(name, matchId, runs, balls, fours, sixes, wickets, overs, runsConceded)
+            )
+        }
+    }
+
+    private fun calculateStatistics() {
+        // Calculate NRR for teams
+        teams.values.forEach { team ->
+            if (team.oversFaced > 0 && team.oversBowled > 0) {
+                team.nrr = (team.runsFor / team.oversFaced) - (team.runsAgainst / team.oversBowled)
+            }
+        }
+
+        // Calculate player stats
+        players.values.forEach { player ->
+            // Batting stats
+            player.strikeRate = if (player.balls > 0) {
+                (player.runs.toDouble() / player.balls * 100)
+            } else 0.0
+
+            player.battingAverage = if (player.balls > 0) {
+                player.runs.toDouble() / (player.balls / 6.0)
+            } else 0.0
+
+            // Bowling stats
+            player.bowlingAverage = if (player.wickets > 0) {
+                player.runsGiven.toDouble() / player.wickets
+            } else 0.0
+
+            player.economy = if (player.overs > 0) {
+                player.runsGiven.toDouble() / player.overs
+            } else 0.0
+
+            // Fantasy points
+            player.fantasyPoints = calculateFantasyPoints(player)
+        }
+
+        createStatCategories()
+    }
+
+    private fun calculateFantasyPoints(player: PlayerStats): Int {
+        var points = 0
+
+        // Batting points
+        points += player.runs  // 1 point per run
+        points += player.fours * 1  // 1 point per four
+        points += player.sixes * 2  // 2 points per six
+        points += player.halfCenturies * 8  // 8 points per 50
+        points += player.centuries * 16  // 16 points per 100
+
+        // Bowling points
+        points += player.wickets * 25  // 25 points per wicket
+
+        // Economy bonus/penalty
+        if (player.overs > 0) {
+            val economy = player.runsGiven / player.overs
+            points += when {
+                economy < 6 -> 20
+                economy < 8 -> 10
+                economy > 10 -> -10
+                else -> 0
+            }
+        }
+
+        return points
+    }
+
+    private fun createStatCategories() {
+        statCategories.clear()
+
+        // 1. Top Run Scorers
+        val topScorers = players.values
+            .sortedByDescending { it.runs }
+            .take(6)
+            .map { TopPlayer(it.name, "${it.runs} runs", "${it.balls} balls, SR: ${"%.2f".format(it.strikeRate)}") }
+
+        statCategories.add(
+            StatCategory("🏆 Top Run Scorers", "Most runs in tournament", topScorers)
         )
 
-        loadAllStats()
-    }
+        // 2. Most Centuries
+        val topCenturies = players.values
+            .sortedByDescending { it.centuries }
+            .take(6)
+            .map { TopPlayer(it.name, "${it.centuries} centuries", "HS: ${it.highestScore}, Runs: ${it.runs}") }
 
-    private fun loadAllStats() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val db = AppDatabase.getDatabase(requireContext())
-                val performances = db.tournamentDao().getPlayerPerformances(tournamentId)
-                val tournament = db.tournamentDao().getTournamentById(tournamentId)
+        statCategories.add(
+            StatCategory("💯 Most Centuries", "Players with most hundreds", topCenturies)
+        )
 
-                withContext(Dispatchers.Main) {
-                    binding.tvTournamentName.text = tournament?.name ?: "Tournament"
+        // 3. Most Wickets
+        val topWickets = players.values
+            .filter { it.wickets > 0 }
+            .sortedByDescending { it.wickets }
+            .take(6)
+            .map { TopPlayer(it.name, "${it.wickets} wickets", "Best: ${it.bestBowlingWickets}/${it.bestBowlingRuns}") }
 
-                    if (performances.isEmpty()) {
+        statCategories.add(
+            StatCategory("🎯 Most Wickets", "Highest wicket-takers", topWickets)
+        )
 
-                    } else {
-                        hideAllProgressBars()
-                        calculateAndDisplayAllStats(performances)
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    showErrorState(e.message ?: "Unknown error")
-                }
-            } finally {
-                withContext(Dispatchers.Main) {
-                    binding.swipeRefreshLayout.isRefreshing = false
-                    binding.tvLastUpdated.text = "Last updated: ${getCurrentTime()}"
-                }
-            }
-        }
-    }
+        // 4. Best Strike Rate
+        val topStrikeRate = players.values
+            .filter { it.balls >= 30 }
+            .sortedByDescending { it.strikeRate }
+            .take(6)
+            .map { TopPlayer(it.name, "SR: ${"%.2f".format(it.strikeRate)}", "${it.runs} runs in ${it.balls} balls") }
 
-    private fun calculateAndDisplayAllStats(performances: List<com.example.handcricket.data.PlayerPerformance>) {
-        // Group performances by player
-        val batterPerformances = performances.filter { it.role == "batter" }.groupBy { it.playerName }
-        val bowlerPerformances = performances.filter { it.role == "bowler" }.groupBy { it.playerName }
-        val allPlayers = (batterPerformances.keys + bowlerPerformances.keys).distinct()
+        statCategories.add(
+            StatCategory("⚡ Best Strike Rate", "Min 30 balls faced", topStrikeRate)
+        )
 
-        // Calculate and display each section
-        displayTopScorers(batterPerformances)
-        displayTopBowlers(bowlerPerformances)
-        displayMilestones(batterPerformances)
-        displayBoundaryStats(batterPerformances)
-        displayBestEconomy(bowlerPerformances)
-        displayFantasyPoints(batterPerformances, bowlerPerformances)
-        displayTournamentSummary(performances, allPlayers.size)
-    }
+        // 5. Most Sixes
+        val topSixes = players.values
+            .sortedByDescending { it.sixes }
+            .take(6)
+            .map { TopPlayer(it.name, "${it.sixes} sixes", "${it.runs} runs, ${it.balls} balls") }
 
-    private fun displayTopScorers(batterPerformances: Map<String, List<com.example.handcricket.data.PlayerPerformance>>) {
-        val topScorers = batterPerformances.map { (name, perfList) ->
-            val totalRuns = perfList.sumOf { it.runs }
-            val totalBalls = perfList.sumOf { it.balls }
-            val strikeRate = if (totalBalls > 0) (totalRuns.toFloat() / totalBalls * 100) else 0f
-            TopScorer(
-                name,
-                totalRuns,
-                totalBalls,
-                perfList.sumOf { it.fours },
-                perfList.sumOf { it.sixes },
-                strikeRate,
-                perfList.filter { it.runs >= 100 }.size,
-                perfList.filter { it.runs in 50..99 }.size
+        statCategories.add(
+            StatCategory("💥 Most Sixes", "Big hitters of the tournament", topSixes)
+        )
+
+        // 6. Fantasy Points Leaders
+        val fantasyLeaders = players.values
+            .sortedByDescending { it.fantasyPoints }
+            .take(6)
+            .map { TopPlayer(it.name, "${it.fantasyPoints} pts", "${it.runs}R/${it.wickets}W") }
+
+        statCategories.add(
+            StatCategory("🏅 Fantasy Points", "Top fantasy performers", fantasyLeaders)
+        )
+
+        // 7. Team Standings
+        val sortedTeams = teams.values
+            .sortedWith(compareByDescending<TeamStats> { it.wins }.thenByDescending { it.nrr })
+            .take(6)
+
+        val teamStandings = sortedTeams.mapIndexed { index, team ->
+            TopPlayer(
+                "${index + 1}. ${team.name}",
+                "${team.wins}W/${team.losses}L",
+                "NRR: ${"%.3f".format(team.nrr)}"
             )
-        }.sortedByDescending { it.runs }.take(10)
+        }
 
-        binding.tvTopScorersCount.text = "${topScorers.size}"
-        binding.tvTopScorers.text = buildString {
-            topScorers.forEachIndexed { index, scorer ->
-                append("${index + 1}. ${scorer.name}\n")
-                append("   ${scorer.runs} runs")
-                append(" • SR: ${"%.2f".format(scorer.strikeRate)}")
-                append(" • ${scorer.fours}4/${scorer.sixes}6")
-                if (scorer.centuries > 0) append(" • 💯x${scorer.centuries}")
-                if (scorer.fifties > 0) append(" • 50x${scorer.fifties}")
-                append("\n\n")
-            }
+        statCategories.add(
+            StatCategory("📊 Team Standings", "Tournament rankings", teamStandings)
+        )
+    }
+
+    private fun updateUI() {
+        adapter.submitList(statCategories)
+
+        // Show total stats summary
+        binding.tvSummary.text = buildString {
+            append("📈 Tournament Summary\n\n")
+            append("• ${teams.size} Teams\n")
+            append("• ${players.size} Players\n")
+            append("• ${matchPerformances.size / 22} Matches\n")
+
+            val topRunScorer = players.values.maxByOrNull { it.runs }
+            val topWicketTaker = players.values.maxByOrNull { it.wickets }
+
+            append("\n🏆 Top Performer:\n")
+            append("  Runs: ${topRunScorer?.name} (${topRunScorer?.runs})\n")
+            append("  Wickets: ${topWicketTaker?.name} (${topWicketTaker?.wickets})")
         }
     }
 
-    private fun displayTopBowlers(bowlerPerformances: Map<String, List<com.example.handcricket.data.PlayerPerformance>>) {
-        val topBowlers = bowlerPerformances.map { (name, perfList) ->
-            val totalWickets = perfList.sumOf { it.wickets }
-            val totalOvers = perfList.sumOf { it.overs.toDouble() }.toFloat()
-            val totalRuns = perfList.sumOf { it.runsConceded }
-            val economy = if (totalOvers > 0) totalRuns.toFloat() / totalOvers else 0f
-            val bestFigures = perfList.maxByOrNull { it.wickets }?.let {
-                "${it.wickets}/${it.runsConceded}"
-            } ?: "0/0"
+    private fun loadSampleData() {
+        // Create sample data for demonstration
+        addSampleTeams()
+        addSamplePlayers()
+    }
 
-            TopBowler(
-                name,
-                totalWickets,
-                totalOvers,
-                economy,
-                bestFigures,
-                perfList.filter { it.wickets >= 3 }.size
-            )
-        }.sortedByDescending { it.wickets }.take(10)
+    private fun addSampleTeams() {
+        val sampleTeams = listOf(
+            TeamStats("India", 5, 4, 1, 1250, 48.2, 980, 50.0, 1.25),
+            TeamStats("Australia", 5, 3, 2, 1100, 49.5, 1050, 49.0, 0.85),
+            TeamStats("England", 5, 3, 2, 1150, 47.8, 1080, 48.5, 0.92),
+            TeamStats("Pakistan", 5, 2, 3, 980, 46.5, 1020, 47.0, -0.15)
+        )
 
-        binding.tvTopBowlersCount.text = "${topBowlers.size}"
-        binding.tvTopBowlers.text = buildString {
-            topBowlers.forEachIndexed { index, bowler ->
-                append("${index + 1}. ${bowler.name}\n")
-                append("   ${bowler.wickets} wickets")
-                append(" • Eco: ${"%.2f".format(bowler.economy)}")
-                append(" • Best: ${bowler.bestFigures}")
-                if (bowler.threePlusWickets > 0) append(" • 3+W: ${bowler.threePlusWickets}")
-                append("\n\n")
-            }
+        sampleTeams.forEach { team ->
+            teams[team.name] = team
         }
     }
 
-    private fun displayMilestones(batterPerformances: Map<String, List<com.example.handcricket.data.PlayerPerformance>>) {
-        val centuries = batterPerformances.flatMap { it.value.filter { perf -> perf.runs >= 100 } }
-        val fifties = batterPerformances.flatMap { it.value.filter { perf -> perf.runs in 50..99 } }
+    private fun addSamplePlayers() {
+        val samplePlayers = listOf(
+            PlayerStats("Virat Kohli", 450, 300, 45, 12, 132, 1, 3, 2, 10.0, 85, 2, 35, 5),
+            PlayerStats("David Warner", 380, 250, 38, 15, 128, 1, 2, 0, 0.0, 0, 0, 0, 5),
+            PlayerStats("Jos Buttler", 320, 180, 28, 18, 110, 1, 2, 0, 0.0, 0, 0, 0, 5),
+            PlayerStats("Saim Ayub", 280, 200, 32, 8, 95, 0, 2, 5, 20.0, 150, 3, 25, 5),
+            PlayerStats("Jasprit Bumrah", 30, 20, 4, 1, 25, 0, 0, 15, 25.0, 180, 5, 22, 5),
+            PlayerStats("Pat Cummins", 45, 35, 5, 2, 28, 0, 0, 12, 22.0, 165, 4, 18, 5)
+        )
 
-        val centuryLeaders = centuries.groupBy { it.playerName }
-            .map { (name, list) -> name to list.size }
-            .sortedByDescending { it.second }
-            .take(3)
-
-        val fiftyLeaders = fifties.groupBy { it.playerName }
-            .map { (name, list) -> name to list.size }
-            .sortedByDescending { it.second }
-            .take(3)
-
-        binding.tvCenturiesCount.text = "${centuries.size}"
-        binding.tvFiftiesCount.text = "${fifties.size}"
-
-        binding.tvCenturiesTop.text = if (centuryLeaders.isNotEmpty()) {
-            "${centuryLeaders[0].first} (${centuryLeaders[0].second})"
-        } else "-"
-
-        binding.tvFiftiesTop.text = if (fiftyLeaders.isNotEmpty()) {
-            "${fiftyLeaders[0].first} (${fiftyLeaders[0].second})"
-        } else "-"
-
-        binding.tvMilestones.text = buildString {
-            if (centuryLeaders.isNotEmpty()) {
-                append("Century Leaders:\n")
-                centuryLeaders.forEachIndexed { index, (name, count) ->
-                    append("  ${index + 1}. $name - $count century${if (count > 1) "s" else ""}\n")
-                }
-            }
-            if (fiftyLeaders.isNotEmpty()) {
-                if (isNotEmpty()) append("\n")
-                append("Fifty Leaders:\n")
-                fiftyLeaders.forEachIndexed { index, (name, count) ->
-                    append("  ${index + 1}. $name - $count fifty${if (count > 1) "s" else ""}\n")
-                }
-            }
-            if (isEmpty()) {
-                append("No milestones achieved yet.")
-            }
+        samplePlayers.forEach { player ->
+            players[player.name] = player
         }
     }
 
-    private fun displayBoundaryStats(batterPerformances: Map<String, List<com.example.handcricket.data.PlayerPerformance>>) {
-        val totalFours = batterPerformances.flatMap { it.value }.sumOf { it.fours }
-        val totalSixes = batterPerformances.flatMap { it.value }.sumOf { it.sixes }
-
-        val fourLeaders = batterPerformances.map { (name, list) ->
-            name to list.sumOf { it.fours }
-        }.sortedByDescending { it.second }.take(3)
-
-        val sixLeaders = batterPerformances.map { (name, list) ->
-            name to list.sumOf { it.sixes }
-        }.sortedByDescending { it.second }.take(3)
-
-        binding.tvTotalFours.text = "$totalFours"
-        binding.tvTotalSixes.text = "$totalSixes"
-
-        binding.tvMostFours.text = if (fourLeaders.isNotEmpty()) {
-            "${fourLeaders[0].first} (${fourLeaders[0].second})"
-        } else "-"
-
-        binding.tvMostSixes.text = if (sixLeaders.isNotEmpty()) {
-            "${sixLeaders[0].first} (${sixLeaders[0].second})"
-        } else "-"
-
-        binding.tvBoundaryLeaders.text = buildString {
-            append("Most Fours:\n")
-            if (fourLeaders.isNotEmpty()) {
-                fourLeaders.forEachIndexed { index, (name, count) ->
-                    append("  ${index + 1}. $name - $count fours\n")
-                }
-            } else {
-                append("  No data\n")
-            }
-
-            append("\nMost Sixes:\n")
-            if (sixLeaders.isNotEmpty()) {
-                sixLeaders.forEachIndexed { index, (name, count) ->
-                    append("  ${index + 1}. $name - $count sixes\n")
-                }
-            } else {
-                append("  No data\n")
-            }
-        }
+    private fun extractRuns(line: String): Int {
+        val pattern = """(\d+)\s*/""".toRegex()
+        return pattern.find(line)?.groupValues?.get(1)?.toIntOrNull() ?: 0
     }
 
-    private fun displayBestEconomy(bowlerPerformances: Map<String, List<com.example.handcricket.data.PlayerPerformance>>) {
-        val economyLeaders = bowlerPerformances.map { (name, perfList) ->
-            val totalOvers = perfList.sumOf { it.overs.toDouble() }.toFloat()
-            val totalRuns = perfList.sumOf { it.runsConceded }
-            val economy = if (totalOvers >= 5) totalRuns.toFloat() / totalOvers else Float.MAX_VALUE
-            val wickets = perfList.sumOf { it.wickets }
-
-            EconomyRecord(name, economy, wickets, totalOvers)
-        }.filter { it.overs >= 5f }
-            .sortedBy { it.economy }
-            .take(5)
-
-        binding.tvBestEconomyValue.text = if (economyLeaders.isNotEmpty()) {
-            "${"%.2f".format(economyLeaders[0].economy)}"
-        } else "N/A"
-
-        binding.tvBestEconomy.text = buildString {
-            if (economyLeaders.isNotEmpty()) {
-                economyLeaders.forEachIndexed { index, record ->
-                    append("${index + 1}. ${record.name}\n")
-                    append("   Eco: ${"%.2f".format(record.economy)}")
-                    append(" • Wkts: ${record.wickets}")
-                    append(" • Overs: ${"%.1f".format(record.overs)}\n\n")
-                }
-            } else {
-                append("No bowlers with sufficient overs (min 5 overs)")
-            }
-        }
-    }
-
-    private fun displayFantasyPoints(
-        batterPerformances: Map<String, List<com.example.handcricket.data.PlayerPerformance>>,
-        bowlerPerformances: Map<String, List<com.example.handcricket.data.PlayerPerformance>>
-    ) {
-        val fantasyPlayers = (batterPerformances.keys + bowlerPerformances.keys).distinct().map { name ->
-            val batterPerf = batterPerformances[name] ?: emptyList()
-            val bowlerPerf = bowlerPerformances[name] ?: emptyList()
-
-            var battingPoints = 0
-            var bowlingPoints = 0
-
-            // Calculate batting points
-            batterPerf.forEach { perf ->
-                // Basic runs
-                battingPoints += perf.runs
-                // Boundary bonuses
-                battingPoints += perf.fours * 1
-                battingPoints += perf.sixes * 2
-                // Milestone bonuses
-                battingPoints += when {
-                    perf.runs >= 100 -> 50
-                    perf.runs >= 50 -> 30
-                    perf.runs >= 30 -> 10
-                    else -> 0
-                }
-                // Strike rate bonus
-                if (perf.balls >= 10) {
-                    val sr = (perf.runs.toFloat() / perf.balls) * 100
-                    battingPoints += when {
-                        sr >= 200 -> 20
-                        sr >= 150 -> 15
-                        sr >= 120 -> 10
-                        else -> 0
-                    }
-                }
-            }
-
-            // Calculate bowling points
-            bowlerPerf.forEach { perf ->
-                // Wicket points
-                bowlingPoints += perf.wickets * 25
-                // Wicket haul bonuses
-                if (perf.wickets >= 5) bowlingPoints += 30
-                else if (perf.wickets >= 3) bowlingPoints += 20
-                // Economy bonus
-                if (perf.overs >= 2) {
-                    val economy = if (perf.overs > 0) perf.runsConceded / perf.overs else 0f
-                    bowlingPoints += when {
-                        economy < 6 -> 25
-                        economy < 8 -> 15
-                        economy < 10 -> 10
-                        else -> 0
-                    }
-                }
-            }
-
-            FantasyPlayer(
-                name,
-                battingPoints + bowlingPoints,
-                battingPoints,
-                bowlingPoints,
-                batterPerf.size + bowlerPerf.size
-            )
-        }.sortedByDescending { it.totalPoints }.take(5)
-
-        binding.tvTopFantasyPoints.text = if (fantasyPlayers.isNotEmpty()) {
-            "${fantasyPlayers[0].totalPoints} pts"
-        } else "0 pts"
-
-        binding.tvFantasyPoints.text = buildString {
-            if (fantasyPlayers.isNotEmpty()) {
-                fantasyPlayers.forEachIndexed { index, player ->
-                    append("${index + 1}. ${player.name}\n")
-                    append("   ${player.totalPoints} pts")
-                    append(" (Bat: ${player.battingPoints}")
-                    append(", Bowl: ${player.bowlingPoints})")
-                    append(" • ${player.matches} match${if (player.matches != 1) "es" else ""}\n\n")
-                }
-            } else {
-                append("No fantasy points data available")
-            }
-        }
-    }
-
-    private fun displayTournamentSummary(performances: List<com.example.handcricket.data.PlayerPerformance>, totalPlayers: Int) {
-        val totalMatches = performances.groupBy { it.matchId }.size
-        val totalRuns = performances.filter { it.role == "batter" }.sumOf { it.runs }
-        val totalWickets = performances.filter { it.role == "bowler" }.sumOf { it.wickets }
-
-        binding.tvTotalMatches.text = "$totalMatches"
-        binding.tvTotalRuns.text = "$totalRuns"
-        binding.tvTotalWickets.text = "$totalWickets"
-        binding.tvTotalPlayers.text = "$totalPlayers"
-    }
-
-    private fun hideAllProgressBars() {
-        binding.pbTopScorers.visibility = View.GONE
-        binding.pbTopBowlers.visibility = View.GONE
-        binding.pbEconomy.visibility = View.GONE
-        binding.pbFantasy.visibility = View.GONE
-    }
-
-    private fun showEmptyState() {
-        // Show empty state message
-        binding.tvTopScorers.text = "No data available"
-        binding.tvTopBowlers.text = "No data available"
-        binding.tvMilestones.text = "No milestones achieved yet"
-        binding.tvBoundaryLeaders.text = "No boundary data available"
-        binding.tvBestEconomy.text = "No bowling data available"
-        binding.tvFantasyPoints.text = "No fantasy points data available"
-        hideAllProgressBars()
-    }
-
-    private fun showErrorState(error: String) {
-        binding.tvLastUpdated.text = "Error: $error"
-        // You can add more detailed error handling here
-    }
-
-    private fun getCurrentTime(): String {
-        val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
-        return sdf.format(Date())
+    private fun extractOvers(line: String): Double {
+        val pattern = """\((\d+(?:\.\d+)?)\)""".toRegex()
+        return pattern.find(line)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
     }
+}
 
-    companion object {
-        fun newInstance(tournamentId: Int): StatsFragment {
-            val fragment = StatsFragment()
-            val args = Bundle()
-            args.putInt("TOURNAMENT_ID", tournamentId)
-            fragment.arguments = args
-            return fragment
+class StatsAdapter : RecyclerView.Adapter<StatsAdapter.ViewHolder>() {
+    private val items = mutableListOf<StatCategory>()
+
+    fun submitList(newItems: List<StatCategory>) {
+        items.clear()
+        items.addAll(newItems)
+        notifyDataSetChanged()
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+        val binding = ItemStatCategoryBinding.inflate(
+            LayoutInflater.from(parent.context),
+            parent,
+            false
+        )
+        return ViewHolder(binding)
+    }
+
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        holder.bind(items[position])
+    }
+
+    override fun getItemCount() = items.size
+
+    inner class ViewHolder(private val binding: ItemStatCategoryBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+
+        fun bind(category: StatCategory) {
+            binding.tvCategoryTitle.text = category.title
+            binding.tvCategoryDescription.text = category.description
+
+            // Clear previous views
+            binding.playersLayout.removeAllViews()
+
+            // Add player items
+            category.topPlayers.forEach { player ->
+                val playerView = LayoutInflater.from(binding.root.context)
+                    .inflate(R.layout.item_top_player, binding.playersLayout, false)
+
+                val playerBinding = ItemTopPlayerBinding.bind(playerView)
+                playerBinding.tvPlayerName.text = player.name
+                playerBinding.tvPlayerValue.text = player.value
+                playerBinding.tvPlayerDetails.text = player.details
+
+                binding.playersLayout.addView(playerView)
+            }
         }
     }
 }
-
-// Data classes for statistics (keep these in StatsFragment.kt)
-data class TopScorer(
-    val name: String,
-    val runs: Int,
-    val balls: Int,
-    val fours: Int,
-    val sixes: Int,
-    val strikeRate: Float,
-    val centuries: Int = 0,
-    val fifties: Int = 0
-)
-
-data class TopBowler(
-    val name: String,
-    val wickets: Int,
-    val overs: Float,
-    val economy: Float,
-    val bestFigures: String,
-    val threePlusWickets: Int = 0
-)
-
-data class EconomyRecord(
-    val name: String,
-    val economy: Float,
-    val wickets: Int,
-    val overs: Float
-)
-
-data class FantasyPlayer(
-    val name: String,
-    val totalPoints: Int,
-    val battingPoints: Int,
-    val bowlingPoints: Int,
-    val matches: Int = 0
-)
