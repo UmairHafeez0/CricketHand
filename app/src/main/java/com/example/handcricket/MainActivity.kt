@@ -27,9 +27,6 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.fabUpload.setOnClickListener {
-            openFilePicker()
-        }
 
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()

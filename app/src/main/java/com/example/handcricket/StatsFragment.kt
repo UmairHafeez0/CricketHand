@@ -122,7 +122,6 @@ class StatsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.progressBar.visibility = View.VISIBLE
 
         adapter = StatsAdapter()
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
@@ -141,7 +140,6 @@ class StatsFragment : Fragment() {
             calculateStatistics()
 
             withContext(Dispatchers.Main) {
-                binding.progressBar.visibility = View.GONE
                 updateUI()
             }
         }
@@ -488,23 +486,27 @@ class StatsFragment : Fragment() {
     }
 
     private fun updateUI() {
+        binding.emptyState.visibility = View.GONE
+        binding.recyclerView.visibility = View.VISIBLE
+
+        // Update summary stats
+        binding.tvTeamsCount.text = teams.size.toString()
+        binding.tvPlayersCount.text = players.size.toString()
+        binding.tvMatchesCount.text = (matchPerformances.size / 22).toString()
+
+        // Update top performers
+        val topBatsman = players.values.maxByOrNull { it.runs }
+        val topBowler = players.values.maxByOrNull { it.wickets }
+
+        binding.tvTopBatsman.text = "🔥 Top Batsman: ${topBatsman?.name ?: "N/A"} (${topBatsman?.runs ?: 0} runs)"
+        binding.tvTopBowler.text = "🎯 Top Bowler: ${topBowler?.name ?: "N/A"} (${topBowler?.wickets ?: 0} wickets)"
+
+        // Update stats count badge
+        binding.tvStatsCount.text = "${teams.size} Teams • ${players.size} Players"
+
         adapter.submitList(statCategories)
-
-        // Show total stats summary
-        binding.tvSummary.text = buildString {
-            append("📈 Tournament Summary\n\n")
-            append("• ${teams.size} Teams\n")
-            append("• ${players.size} Players\n")
-            append("• ${matchPerformances.size / 22} Matches\n")
-
-            val topRunScorer = players.values.maxByOrNull { it.runs }
-            val topWicketTaker = players.values.maxByOrNull { it.wickets }
-
-            append("\n🏆 Top Performer:\n")
-            append("  Runs: ${topRunScorer?.name} (${topRunScorer?.runs})\n")
-            append("  Wickets: ${topWicketTaker?.name} (${topWicketTaker?.wickets})")
-        }
     }
+
 
     private fun loadSampleData() {
         // Create sample data for demonstration
