@@ -29,6 +29,7 @@
                 android:padding="20dp">
 
                 <!-- Tournament Header -->
+                <!-- Tournament Header -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -42,28 +43,38 @@
                         android:src="@drawable/ic_trophy"
                         app:tint="@color/gold" />
 
-                    <TextView
+                    <!-- Right side container -->
+                    <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginStart="12dp"
-                        android:text="🏏 CricStat Pro"
-                        android:textSize="22sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/purple_700"
-                        android:fontFamily="sans-serif-medium" />
+                        android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/tv_stats_count"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_purple_rounded"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="4dp"
-                        android:text="Live"
-                        android:textColor="@color/white"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="🏏 CricStat Pro"
+                            android:textSize="22sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/purple_700"
+                            android:fontFamily="sans-serif-medium" />
+
+                        <TextView
+                            android:id="@+id/tv_stats_count"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:background="@drawable/bg_purple_rounded"
+                            android:paddingHorizontal="12dp"
+                            android:paddingVertical="4dp"
+                            android:text="Live"
+                            android:textColor="@color/white"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
                 </LinearLayout>
 
                 <!-- Divider -->
@@ -188,6 +199,32 @@
                     </LinearLayout>
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
+                <!-- Total Runs Display -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginTop="12dp"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🏏"
+                        android:textSize="16sp"
+                        android:layout_marginEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/tv_total_runs"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Total Runs Scored: 0"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/purple_700" />
+                </LinearLayout>
+
                 <!-- Quick Stats -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -199,22 +236,30 @@
                         android:id="@+id/tv_top_batsman"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="🔥 Top Batsman: Loading..."
+                        android:text="🔥   Top Batsman: Loading..."
                         android:textSize="13sp"
                         android:textColor="@color/gray_700"
                         android:drawablePadding="8dp"
-                        android:drawableStart="@drawable/ic_bat"
                         android:paddingVertical="4dp" />
 
                     <TextView
                         android:id="@+id/tv_top_bowler"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="🎯 Top Bowler: Loading..."
+                        android:text="🎯   Top Bowler: Loading..."
                         android:textSize="13sp"
                         android:textColor="@color/gray_700"
                         android:drawablePadding="8dp"
-                        android:drawableStart="@drawable/ic_ball"
+                        android:paddingVertical="4dp" />
+
+                    <TextView
+                        android:id="@+id/tv_top_team"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="🏆   Leading Team: Loading..."
+                        android:textSize="13sp"
+                        android:textColor="@color/gray_700"
+                        android:drawablePadding="8dp"
                         android:paddingVertical="4dp" />
                 </LinearLayout>
             </LinearLayout>
