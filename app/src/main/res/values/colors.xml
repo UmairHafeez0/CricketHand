@@ -35,6 +35,11 @@
     <color name="gray_600">#757575</color>
     <color name="gray_700">#616161</color>
     <color name="gray_800">#424242</color>
+
+    <!-- NEW GREY COLORS ADDED HERE -->
+    <color name="grey_50">#FAFAFA</color>
+    <color name="grey_100">#F5F5F5</color>
+
     <!-- Accent color -->
     <color name="gray_dark">#424242</color>
     <color name="gray_divider">#E0E0E0</color>

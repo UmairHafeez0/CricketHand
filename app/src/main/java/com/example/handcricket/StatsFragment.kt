@@ -1,8 +1,12 @@
 package com.example.handcricket
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Parcel
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -70,15 +74,39 @@ data class MatchPerformance(
 data class StatCategory(
     val title: String,
     val description: String,
-    val topPlayers: List<TopPlayer>
+    val topPlayers: List<TopPlayer>,           // Limited list for main view
+    val allPlayers: List<TopPlayer>            // Full list for detailed view
 )
-
+@SuppressLint("ParcelCreator")
 data class TopPlayer(
     val name: String,
     val value: String,
     val details: String
-)
+) : Parcelable {
+    constructor(parcel: Parcel) : this(
+        parcel.readString() ?: "",
+        parcel.readString() ?: "",
+        parcel.readString() ?: ""
+    )
 
+    override fun describeContents(): Int = 0
+
+    override fun writeToParcel(parcel: Parcel, flags: Int) {
+        parcel.writeString(name)
+        parcel.writeString(value)
+        parcel.writeString(details)
+    }
+
+    companion object CREATOR : Parcelable.Creator<TopPlayer> {
+        override fun createFromParcel(parcel: Parcel): TopPlayer {
+            return TopPlayer(parcel)
+        }
+
+        override fun newArray(size: Int): Array<TopPlayer?> {
+            return arrayOfNulls(size)
+        }
+    }
+}
 class StatsFragment : Fragment() {
     companion object {
         fun newInstance(files: List<Uri>, useSample: Boolean = false): StatsFragment {
@@ -95,7 +123,7 @@ class StatsFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var adapter: StatsAdapter
 
-    private val teamMap = mapOf(
+    private var teamMap = mutableMapOf(
         "Saim" to "Pakistan",
         "Virat" to "India",
         "Kohli" to "India",
@@ -105,6 +133,293 @@ class StatsFragment : Fragment() {
         "Finn Allen" to "New Zealand"
     )
 
+    private fun loadTeamMapFromPreferences(): Map<String, String> {
+        val context = requireContext()
+        val sharedPrefs = context.getSharedPreferences("TeamMappings", Context.MODE_PRIVATE)
+        val savedData = sharedPrefs.getString("team_player_data", null)
+
+        return if (savedData != null && savedData.isNotEmpty()) {
+            // Parse the saved data
+            teamMap = mutableMapOf<String, String>()
+
+            savedData.split(";;").forEach { teamData ->
+                val parts = teamData.split("::")
+                if (parts.size == 2) {
+                    val team = parts[0].trim()
+                    val playersText = parts[1].trim()
+
+                    if (playersText.isNotEmpty()) {
+                        playersText.split(",").forEach { player ->
+                            val trimmedPlayer = player.trim().lowercase()
+                            if (trimmedPlayer.isNotEmpty()) {
+                                teamMap[trimmedPlayer] = team
+                            }
+                        }
+                    }
+                }
+            }
+
+            teamMap
+        } else {
+            // Load default teamMap
+            mapOf(
+                // 🇵🇰 Pakistan
+                "babar" to "Pakistan",
+                "rizwan" to "Pakistan",
+                "saim" to "Pakistan",
+                "iftikhar" to "Pakistan",
+                "shaheen" to "Pakistan",
+                "shadab" to "Pakistan",
+                "fakhar" to "Pakistan",
+                "haris" to "Pakistan",
+                "naseem" to "Pakistan",
+                "imad" to "Pakistan",
+                "mohammad" to "Pakistan",
+                "nawaz" to "Pakistan",
+                "azam" to "Pakistan",
+                "afridi" to "Pakistan",
+                "hassan" to "Pakistan",
+
+                // 🇮🇳 India
+                "virat" to "India",
+                "kohli" to "India",
+                "rohit" to "India",
+                "gill" to "India",
+                "surya" to "India",
+                "hardik" to "India",
+                "rahul" to "India",
+                "pandya" to "India",
+                "jadeja" to "India",
+                "bumrah" to "India",
+                "shami" to "India",
+                "ishan" to "India",
+                "pant" to "India",
+                "ashwin" to "India",
+                "chahal" to "India",
+
+                // 🇦🇺 Australia
+                "warner" to "Australia",
+                "smith" to "Australia",
+                "maxwell" to "Australia",
+                "head" to "Australia",
+                "marsh" to "Australia",
+                "stoinis" to "Australia",
+                "cummins" to "Australia",
+                "starc" to "Australia",
+                "hazlewood" to "Australia",
+                "zampa" to "Australia",
+                "wade" to "Australia",
+                "carey" to "Australia",
+                "agar" to "Australia",
+                "green" to "Australia",
+                "finch" to "Australia",
+
+                // 🏴 England
+                "buttler" to "England",
+                "bairstow" to "England",
+                "malan" to "England",
+                "livingstone" to "England",
+                "brook" to "England",
+                "stokes" to "England",
+                "moeen" to "England",
+                "root" to "England",
+                "archer" to "England",
+                "wood" to "England",
+                "rashid" to "England",
+                "mills" to "England",
+                "salt" to "England",
+                "curran" to "England",
+                "ali" to "England",
+
+                // 🇿🇦 South Africa
+                "quinton" to "South Africa",
+                "de kock" to "South Africa",
+                "markram" to "South Africa",
+                "klaasen" to "South Africa",
+                "miller" to "South Africa",
+                "rabada" to "South Africa",
+                "bavuma" to "South Africa",
+                "verreynne" to "South Africa",
+                "nortje" to "South Africa",
+                "shamsi" to "South Africa",
+                "jansen" to "South Africa",
+                "ngidi" to "South Africa",
+                "peter sen" to "South Africa",
+                "ricks" to "South Africa",
+                "brevis" to "South Africa",
+
+                // 🇳🇿 New Zealand
+                "finn" to "New Zealand",
+                "allen" to "New Zealand",
+                "kane" to "New Zealand",
+                "williamson" to "New Zealand",
+                "conway" to "New Zealand",
+                "mitchell" to "New Zealand",
+                "southee" to "New Zealand",
+                "boult" to "New Zealand",
+                "santner" to "New Zealand",
+                "phillips" to "New Zealand",
+                "chapman" to "New Zealand",
+                "young" to "New Zealand",
+                "blundell" to "New Zealand",
+                "ferguson" to "New Zealand",
+                "neesham" to "New Zealand",
+
+                // 🏝 West Indies
+                "poor an" to "West Indies",
+                "powell" to "West Indies",
+                "king" to "West Indies",
+                "hope" to "West Indies",
+                "holder" to "West Indies",
+                "shepherd" to "West Indies",
+                "russell" to "West Indies",
+                "bravo" to "West Indies",
+                "narine" to "West Indies",
+                "gayle" to "West Indies",
+                "pollard" to "West Indies",
+                "lewis" to "West Indies",
+                "hetmyer" to "West Indies",
+                "mayers" to "West Indies",
+                "cotterell" to "West Indies",
+
+                // 🇱🇰 Sri Lanka
+                "kus al" to "Sri Lanka",
+                "mendis" to "Sri Lanka",
+                "shanaka" to "Sri Lanka",
+                "rajapaksa" to "Sri Lanka",
+                "hasaranga" to "Sri Lanka",
+                "as alanka" to "Sri Lanka",
+                "mathews" to "Sri Lanka",
+                "karunaratne" to "Sri Lanka",
+                "chandimal" to "Sri Lanka",
+                "perera" to "Sri Lanka",
+                "fernando" to "Sri Lanka",
+                "theekshana" to "Sri Lanka",
+                "pathirana" to "Sri Lanka",
+                "nissanka" to "Sri Lanka",
+                "bandara" to "Sri Lanka",
+
+                // 🇧🇩 Bangladesh
+                "shanto" to "Bangladesh",
+                "liton" to "Bangladesh",
+                "sakib" to "Bangladesh",
+                "mushfiq" to "Bangladesh",
+                "afif" to "Bangladesh",
+                "mahmudullah" to "Bangladesh",
+                "tamim" to "Bangladesh",
+                "mustafizur" to "Bangladesh",
+                "taskin" to "Bangladesh",
+                "mehidy" to "Bangladesh",
+                "soumya" to "Bangladesh",
+                "yasin" to "Bangladesh",
+                "e badot" to "Bangladesh",
+                "shoriful" to "Bangladesh",
+                "mosaddek" to "Bangladesh",
+
+                // 🇦🇫 Afghanistan
+                "gurbaz" to "Afghanistan",
+                "ibrahim" to "Afghanistan",
+                "najib" to "Afghanistan",
+                "rashid" to "Afghanistan",
+                "nabi" to "Afghanistan",
+                "rahmanullah" to "Afghanistan",
+                "mujeeb" to "Afghanistan",
+                "shahidi" to "Afghanistan",
+                "noor" to "Afghanistan",
+                "fazal" to "Afghanistan",
+                "karim" to "Afghanistan",
+                "zadran" to "Afghanistan",
+                "ullah" to "Afghanistan",
+                "safi" to "Afghanistan",
+                "janat" to "Afghanistan",
+
+                // 🇮🇪 Ireland
+                "stirling" to "Ireland",
+                "balbirnie" to "Ireland",
+                "tucker" to "Ireland",
+                "dockrell" to "Ireland",
+                "campher" to "Ireland",
+                "ad air" to "Ireland",
+                "mccarthy" to "Ireland",
+                "little" to "Ireland",
+                "delany" to "Ireland",
+                "hand" to "Ireland",
+                "white" to "Ireland",
+                "young" to "Ireland",
+                "getkate" to "Ireland",
+                "rock" to "Ireland",
+                "humphreys" to "Ireland",
+
+                // 🇿🇼 Zimbabwe
+                "er vine" to "Zimbabwe",
+                "kaia" to "Zimbabwe",
+                "madhevere" to "Zimbabwe",
+                "burl" to "Zimbabwe",
+                "ryan" to "Zimbabwe",
+                "myers" to "Zimbabwe",
+                "williams" to "Zimbabwe",
+                "chakabva" to "Zimbabwe",
+                "raza" to "Zimbabwe",
+                "chatara" to "Zimbabwe",
+                "muzarabani" to "Zimbabwe",
+                "marumani" to "Zimbabwe",
+                "masakadza" to "Zimbabwe",
+                "mavuta" to "Zimbabwe",
+                "bennett" to "Zimbabwe",
+
+                // 🇳🇱 Netherlands
+                "edwards" to "Netherlands",
+                "max o'dowd" to "Netherlands",
+                "barresi" to "Netherlands",
+                "klaassen" to "Netherlands",
+                "ackermann" to "Netherlands",
+                "van der merwe" to "Netherlands",
+                "levitt" to "Netherlands",
+                "engelbrecht" to "Netherlands",
+                "de leede" to "Netherlands",
+                "van beek" to "Netherlands",
+                "dutt" to "Netherlands",
+                "vijay" to "Netherlands",
+                "klein" to "Netherlands",
+                "kingma" to "Netherlands",
+                "brand" to "Netherlands",
+
+                // 🇵🇹 Scotland
+                "munsey" to "Scotland",
+                "berrington" to "Scotland",
+                "cross" to "Scotland",
+                "leask" to "Scotland",
+                "greaves" to "Scotland",
+                "sharif" to "Scotland",
+                "wheal" to "Scotland",
+                "sole" to "Scotland",
+                "mcallister" to "Scotland",
+                "tahir" to "Scotland",
+                "jarvis" to "Scotland",
+                "hain" to "Scotland",
+                "machan" to "Scotland",
+                "coetzer" to "Scotland",
+                "evans" to "Scotland",
+
+                // 🇦🇪 UAE (additional 16th team)
+                "waseem" to "UAE",
+                "kashif" to "UAE",
+                "meiyappan" to "UAE",
+                "sharma" to "UAE",
+                "naveed" to "UAE",
+                "raza" to "UAE",
+                "mustafa" to "UAE",
+                "lakra" to "UAE",
+                "basil" to "UAE",
+                "kaleem" to "UAE",
+                "zaheer" to "UAE",
+                "chand" to "UAE",
+                "ali" to "UAE",
+                "ahmed" to "UAE",
+                "farooqi" to "UAE"
+            )
+        }
+    }
     private val teams = mutableMapOf<String, TeamStats>()
     private val players = mutableMapOf<String, PlayerStats>()
     private val matchPerformances = mutableListOf<MatchPerformance>()
@@ -126,6 +441,8 @@ class StatsFragment : Fragment() {
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
 
+
+        loadTeamMapFromPreferences()
         GlobalScope.launch(Dispatchers.IO) {
             val files = arguments?.getParcelableArrayList<Uri>("files") ?: emptyList()
             val useSample = arguments?.getBoolean("useSample") ?: false
@@ -287,14 +604,50 @@ class StatsFragment : Fragment() {
     }
 
     private fun detectTeamFromInnings(lines: List<String>, start: Int): String {
-        val block = lines.subList(start, minOf(start + 60, lines.size))
-            .joinToString("\n").lowercase()
 
-        teamMap.forEach { (key, team) ->
-            if (key.lowercase() in block) return team
+        val batsmen = mutableListOf<String>()
+        var inBattingTable = false
+
+        for (i in start until lines.size) {
+            val line = lines[i].trim()
+
+            // Start batting table
+            if (line.startsWith("Batter ID", true)) {
+                inBattingTable = true
+                continue
+            }
+
+            // Stop when batting ends
+            if (
+                line.startsWith("Fall of Wickets", true) ||
+                line.endsWith("Bowling", true)
+            ) break
+
+            if (inBattingTable && line.isNotEmpty()) {
+                val parts = line.split(",")
+
+                if (parts.size >= 2) {
+                    val batterName = parts[1]
+                        .substringBefore("(")   // remove bowler name
+                        .lowercase()
+                        .trim()
+
+                    batsmen.add(batterName)
+                }
+            }
         }
+
+        // Partial + case-insensitive match
+        teamMap.forEach { (key, team) ->
+            if (batsmen.any { it.contains(key.lowercase()) }) {
+                return team
+            }
+        }
+
         return "Computer"
     }
+
+
 
     private fun addTeam(name: String) {
         if (!teams.containsKey(name)) {
@@ -435,13 +788,13 @@ class StatsFragment : Fragment() {
     private fun createStatCategories() {
         statCategories.clear()
 
-        // 1. Team Standings - IMPROVED
+        // 1. Team Standings
         val sortedTeams = teams.values
             .sortedWith(compareByDescending<TeamStats> { it.wins }
                 .thenByDescending { it.nrr }
                 .thenByDescending { it.runsFor - it.runsAgainst })
 
-        val teamStandings = sortedTeams.take(10).mapIndexed { index, team ->
+        val allTeamStandings = sortedTeams.mapIndexed { index, team ->
             TopPlayer(
                 "${index + 1}. ${team.name}",
                 "${team.wins}W - ${team.losses}L",
@@ -450,27 +803,18 @@ class StatsFragment : Fragment() {
         }
 
         statCategories.add(
-            StatCategory("📊 Team Standings", "Win-Loss record with Net Run Rate", teamStandings)
+            StatCategory(
+                "📊 Team Standings",
+                "Win-Loss record with Net Run Rate",
+                allTeamStandings.take(10),      // Show 10 in main view
+                allTeamStandings                // All teams in detailed view
+            )
         )
 
-/*        // 2. Team Run Details - NEW SECTION
-        val teamRunDetails = sortedTeams.take(10).map { team ->
-            TopPlayer(
-                team.name,
-                "Scored: ${team.runsFor} • Conceded: ${team.runsAgainst}",
-                "Overs: ${"%.1f".format(team.oversFaced)}/${"%.1f".format(team.oversBowled)} • Diff: ${team.runsFor - team.runsAgainst}"
-            )
-        }
-
-        statCategories.add(
-            StatCategory("🏏 Run Analysis", "Runs scored vs conceded per team", teamRunDetails)
-        )*/
-
-        // 3. Top Run Scorers
-        val topScorers = players.values
+        // 2. Top Run Scorers
+        val allTopScorers = players.values
             .filter { it.runs > 0 }
             .sortedByDescending { it.runs }
-            .take(8)
             .map {
                 val avg = "%.1f".format(it.battingAverage)
                 val sr = "%.1f".format(it.strikeRate)
@@ -482,16 +826,20 @@ class StatsFragment : Fragment() {
             }
 
         statCategories.add(
-            StatCategory("🏆 Top Run Scorers", "Most runs in tournament", topScorers)
+            StatCategory(
+                "🏆 Top Run Scorers",
+                "Most runs in tournament",
+                allTopScorers.take(8),          // Show 8 in main view
+                allTopScorers                   // All players in detailed view
+            )
         )
 
-        // 4. Most Centuries & Half-Centuries
-        val topCenturyMakers = players.values
+        // 3. Most Centuries & Half-Centuries
+        val allCenturyMakers = players.values
             .filter { it.centuries + it.halfCenturies > 0 }
             .sortedWith(compareByDescending<PlayerStats> { it.centuries }
                 .thenByDescending { it.halfCenturies }
                 .thenByDescending { it.runs })
-            .take(8)
             .map {
                 TopPlayer(
                     it.name,
@@ -501,16 +849,20 @@ class StatsFragment : Fragment() {
             }
 
         statCategories.add(
-            StatCategory("💯 Centuries & Half-Centuries", "50+ scores in tournament", topCenturyMakers)
+            StatCategory(
+                "💯 Centuries & Half-Centuries",
+                "50+ scores in tournament",
+                allCenturyMakers.take(8),
+                allCenturyMakers
+            )
         )
 
-        // 5. Most Wickets - IMPROVED
-        val topWickets = players.values
+        // 4. Most Wickets
+        val allTopWickets = players.values
             .filter { it.wickets > 0 }
             .sortedWith(compareByDescending<PlayerStats> { it.wickets }
                 .thenBy { it.runsGiven }
                 .thenBy { it.overs })
-            .take(8)
             .map {
                 val avg = "%.2f".format(it.bowlingAverage)
                 val econ = "%.2f".format(it.economy)
@@ -522,14 +874,18 @@ class StatsFragment : Fragment() {
             }
 
         statCategories.add(
-            StatCategory("🎯 Most Wickets", "Highest wicket-takers", topWickets)
+            StatCategory(
+                "🎯 Most Wickets",
+                "Highest wicket-takers",
+                allTopWickets.take(8),
+                allTopWickets
+            )
         )
 
-        // 6. Best Strike Rate
-        val topStrikeRate = players.values
+        // 5. Best Strike Rate
+        val allTopStrikeRate = players.values
             .filter { it.balls >= 30 }
             .sortedByDescending { it.strikeRate }
-            .take(8)
             .map {
                 TopPlayer(
                     it.name,
@@ -539,13 +895,17 @@ class StatsFragment : Fragment() {
             }
 
         statCategories.add(
-            StatCategory("⚡ Best Strike Rate", "Min 30 balls faced", topStrikeRate)
+            StatCategory(
+                "⚡ Best Strike Rate",
+                "Min 30 balls faced",
+                allTopStrikeRate.take(8),
+                allTopStrikeRate
+            )
         )
 
-        // 7. Most Boundaries
-        val topBoundaries = players.values
+        // 6. Most Boundaries
+        val allTopBoundaries = players.values
             .sortedByDescending { it.fours + it.sixes }
-            .take(8)
             .map {
                 TopPlayer(
                     it.name,
@@ -555,14 +915,18 @@ class StatsFragment : Fragment() {
             }
 
         statCategories.add(
-            StatCategory("💥 Boundary Hitters", "Most fours and sixes", topBoundaries)
+            StatCategory(
+                "💥 Boundary Hitters",
+                "Most fours and sixes",
+                allTopBoundaries.take(8),
+                allTopBoundaries
+            )
         )
 
-        // 8. Best Economy Rate (Bowling)
-        val bestEconomy = players.values
-            .filter { it.overs >= 5 } // Minimum 5 overs bowled
+        // 7. Best Economy Rate (Bowling)
+        val allBestEconomy = players.values
+            .filter { it.overs >= 5 }
             .sortedBy { it.economy }
-            .take(8)
             .map {
                 TopPlayer(
                     it.name,
@@ -572,13 +936,17 @@ class StatsFragment : Fragment() {
             }
 
         statCategories.add(
-            StatCategory("💰 Best Economy", "Min 5 overs bowled", bestEconomy)
+            StatCategory(
+                "💰 Best Economy",
+                "Min 5 overs bowled",
+                allBestEconomy.take(8),
+                allBestEconomy
+            )
         )
 
-        // 9. Fantasy Points Leaders
-        val fantasyLeaders = players.values
+        // 8. Fantasy Points Leaders
+        val allFantasyLeaders = players.values
             .sortedByDescending { it.fantasyPoints }
-            .take(10)
             .map {
                 TopPlayer(
                     it.name,
@@ -588,26 +956,13 @@ class StatsFragment : Fragment() {
             }
 
         statCategories.add(
-            StatCategory("🏅 Fantasy Points", "Top all-round performers", fantasyLeaders)
+            StatCategory(
+                "🏅 Fantasy Points",
+                "Top all-round performers",
+                allFantasyLeaders.take(10),
+                allFantasyLeaders
+            )
         )
-
-        // 10. Match Summary
-        if (teams.isNotEmpty()) {
-            val totalMatches = teams.values.sumOf { it.matches } / 2
-            val highestTeamScore = teams.values.maxByOrNull { it.runsFor }
-            val lowestTeamScore = teams.values.minByOrNull { it.runsFor }
-
-            val matchSummary = listOf(
-                TopPlayer("Total Matches", "$totalMatches", "All teams combined"),
-                TopPlayer("Highest Team Total", "${highestTeamScore?.runsFor ?: 0}", "${highestTeamScore?.name ?: "N/A"}"),
-                TopPlayer("Most Wins", "${teams.values.maxByOrNull { it.wins }?.wins ?: 0}", "${teams.values.maxByOrNull { it.wins }?.name ?: "N/A"}"),
-                TopPlayer("Best NRR", "${"%.3f".format(teams.values.maxByOrNull { it.nrr }?.nrr ?: 0.0)}", "${teams.values.maxByOrNull { it.nrr }?.name ?: "N/A"}")
-            )
-
-            statCategories.add(
-                StatCategory("📈 Tournament Summary", "Key tournament statistics", matchSummary)
-            )
-        }
     }
 
     private fun updateUI() {
@@ -718,7 +1073,6 @@ class StatsAdapter : RecyclerView.Adapter<StatsAdapter.ViewHolder>() {
     }
 
     override fun getItemCount() = items.size
-
     inner class ViewHolder(private val binding: ItemStatCategoryBinding) :
         RecyclerView.ViewHolder(binding.root) {
 
@@ -729,7 +1083,16 @@ class StatsAdapter : RecyclerView.Adapter<StatsAdapter.ViewHolder>() {
             // Clear previous views
             binding.playersLayout.removeAllViews()
 
-            // Add player items
+            binding.btnViewAll.setOnClickListener {
+                val intent = Intent(binding.root.context, DetailedStatsActivity::class.java).apply {
+                    putExtra("CATEGORY_TITLE", category.title)
+                    putExtra("CATEGORY_DESCRIPTION", category.description)
+                    putParcelableArrayListExtra("TOP_PLAYERS", ArrayList(category.allPlayers)) // Pass allPlayers
+                }
+                binding.root.context.startActivity(intent)
+            }
+
+            // Add player items (showing limited list)
             category.topPlayers.forEach { player ->
                 val playerView = LayoutInflater.from(binding.root.context)
                     .inflate(R.layout.item_top_player, binding.playersLayout, false)
@@ -743,4 +1106,5 @@ class StatsAdapter : RecyclerView.Adapter<StatsAdapter.ViewHolder>() {
             }
         }
     }
+
 }
