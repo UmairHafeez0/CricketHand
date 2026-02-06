@@ -71,12 +71,26 @@ data class MatchPerformance(
     val runsConceded: Int
 )
 
+data class MatchSummary(
+    val team1Name: String,
+    val team2Name: String,
+    val team1Runs: Int,
+    val team1Wickets: Int,
+    val team1Overs: Double,
+    val team2Runs: Int,
+    val team2Wickets: Int,
+    val team2Overs: Double,
+    val winner: String,
+    val loser: String
+)
+
 data class StatCategory(
     val title: String,
     val description: String,
     val topPlayers: List<TopPlayer>,           // Limited list for main view
     val allPlayers: List<TopPlayer>            // Full list for detailed view
 )
+
 @SuppressLint("ParcelCreator")
 data class TopPlayer(
     val name: String,
@@ -107,6 +121,7 @@ data class TopPlayer(
         }
     }
 }
+
 class StatsFragment : Fragment() {
     companion object {
         fun newInstance(files: List<Uri>, useSample: Boolean = false): StatsFragment {
@@ -420,9 +435,11 @@ class StatsFragment : Fragment() {
             )
         }
     }
+
     private val teams = mutableMapOf<String, TeamStats>()
     private val players = mutableMapOf<String, PlayerStats>()
     private val matchPerformances = mutableListOf<MatchPerformance>()
+    private val matchSummaries = mutableListOf<MatchSummary>()
     private val statCategories = mutableListOf<StatCategory>()
 
     override fun onCreateView(
@@ -440,7 +457,6 @@ class StatsFragment : Fragment() {
         adapter = StatsAdapter()
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
-
 
         loadTeamMapFromPreferences()
         GlobalScope.launch(Dispatchers.IO) {
@@ -499,7 +515,7 @@ class StatsFragment : Fragment() {
         val team2Runs = extractRuns(lines[team2Index])
         var team1Overs = extractOvers(lines[team1Index])
         var team2Overs = extractOvers(lines[team2Index])
-        val team1Wickets = extractWickets(lines[team2Index])
+        val team1Wickets = extractWickets(lines[team1Index])
         val team2Wickets = extractWickets(lines[team2Index])
 
         // Determine winner
@@ -509,18 +525,30 @@ class StatsFragment : Fragment() {
         } else {
             Pair(team1Name, team2Name)
         }
-        if(team1Wickets == 10)
-        {
+
+        if (team1Wickets == 10) {
             team1Overs = 10.0
         }
 
-        if(team2Wickets == 10)
-        {
+        if (team2Wickets == 10) {
             team2Overs = 10.0
         }
 
-
-
+        // Store match summary
+        matchSummaries.add(
+            MatchSummary(
+                team1Name = team1Name,
+                team2Name = team2Name,
+                team1Runs = team1Runs,
+                team1Wickets = team1Wickets,
+                team1Overs = team1Overs,
+                team2Runs = team2Runs,
+                team2Wickets = team2Wickets,
+                team2Overs = team2Overs,
+                winner = winner,
+                loser = loser
+            )
+        )
 
         // Update team stats
         teams[team1Name]?.let { team ->
@@ -604,7 +632,6 @@ class StatsFragment : Fragment() {
     }
 
     private fun detectTeamFromInnings(lines: List<String>, start: Int): String {
-
         val batsmen = mutableListOf<String>()
         var inBattingTable = false
 
@@ -646,8 +673,6 @@ class StatsFragment : Fragment() {
 
         return "Computer"
     }
-
-
 
     private fun addTeam(name: String) {
         if (!teams.containsKey(name)) {
@@ -694,7 +719,8 @@ class StatsFragment : Fragment() {
 
         if (wickets > 0) {
             if (wickets > player.bestBowlingWickets ||
-                (wickets == player.bestBowlingWickets && runsConceded < player.bestBowlingRuns)) {
+                (wickets == player.bestBowlingWickets && runsConceded < player.bestBowlingRuns)
+            ) {
                 player.bestBowlingWickets = wickets
                 player.bestBowlingRuns = runsConceded
             }
@@ -707,13 +733,23 @@ class StatsFragment : Fragment() {
         // Store match performance
         if (matchId != null) {
             matchPerformances.add(
-                MatchPerformance(name, matchId, runs, balls, fours, sixes, wickets, overs, runsConceded)
+                MatchPerformance(
+                    name,
+                    matchId,
+                    runs,
+                    balls,
+                    fours,
+                    sixes,
+                    wickets,
+                    overs,
+                    runsConceded
+                )
             )
         }
     }
 
     private fun calculateStatistics() {
-        // Calculate NRR for teams - FIXED
+        // Calculate NRR for teams
         teams.values.forEach { team ->
             if (team.matches > 0) {
                 // Calculate runs per over for batting
@@ -739,7 +775,7 @@ class StatsFragment : Fragment() {
             } else 0.0
 
             // Batting average (runs per dismissal - simplified)
-            val dismissals = player.matches.coerceAtLeast(1) // Simplified - real cricket would need actual dismissals
+            val dismissals = player.matches.coerceAtLeast(1)
             player.battingAverage = player.runs.toDouble() / dismissals
 
             // Bowling stats
@@ -788,11 +824,13 @@ class StatsFragment : Fragment() {
     private fun createStatCategories() {
         statCategories.clear()
 
+
         // 1. Team Standings
         val sortedTeams = teams.values
-            .sortedWith(compareByDescending<TeamStats> { it.wins }
-                .thenByDescending { it.nrr }
-                .thenByDescending { it.runsFor - it.runsAgainst })
+            .sortedWith(
+                compareByDescending<TeamStats> { it.wins }
+                    .thenByDescending { it.nrr }
+                    .thenByDescending { it.runsFor - it.runsAgainst })
 
         val allTeamStandings = sortedTeams.mapIndexed { index, team ->
             TopPlayer(
@@ -806,8 +844,8 @@ class StatsFragment : Fragment() {
             StatCategory(
                 "📊 Team Standings",
                 "Win-Loss record with Net Run Rate",
-                allTeamStandings.take(10),      // Show 10 in main view
-                allTeamStandings                // All teams in detailed view
+                allTeamStandings.take(10),
+                allTeamStandings
             )
         )
 
@@ -829,17 +867,18 @@ class StatsFragment : Fragment() {
             StatCategory(
                 "🏆 Top Run Scorers",
                 "Most runs in tournament",
-                allTopScorers.take(8),          // Show 8 in main view
-                allTopScorers                   // All players in detailed view
+                allTopScorers.take(8),
+                allTopScorers
             )
         )
 
         // 3. Most Centuries & Half-Centuries
         val allCenturyMakers = players.values
             .filter { it.centuries + it.halfCenturies > 0 }
-            .sortedWith(compareByDescending<PlayerStats> { it.centuries }
-                .thenByDescending { it.halfCenturies }
-                .thenByDescending { it.runs })
+            .sortedWith(
+                compareByDescending<PlayerStats> { it.centuries }
+                    .thenByDescending { it.halfCenturies }
+                    .thenByDescending { it.runs })
             .map {
                 TopPlayer(
                     it.name,
@@ -860,9 +899,10 @@ class StatsFragment : Fragment() {
         // 4. Most Wickets
         val allTopWickets = players.values
             .filter { it.wickets > 0 }
-            .sortedWith(compareByDescending<PlayerStats> { it.wickets }
-                .thenBy { it.runsGiven }
-                .thenBy { it.overs })
+            .sortedWith(
+                compareByDescending<PlayerStats> { it.wickets }
+                    .thenBy { it.runsGiven }
+                    .thenBy { it.overs })
             .map {
                 val avg = "%.2f".format(it.bowlingAverage)
                 val econ = "%.2f".format(it.economy)
@@ -963,6 +1003,61 @@ class StatsFragment : Fragment() {
                 allFantasyLeaders
             )
         )
+
+// 0. Main Match Stats - NEW SECTION
+        if (matchSummaries.isNotEmpty()) {
+            val matchStatsList = matchSummaries.mapIndexed { index, match ->
+                // Use abbreviations for team names
+                val team1Abbr = getTeamAbbreviation(match.team1Name)
+                val team2Abbr = getTeamAbbreviation(match.team2Name)
+
+                val margin = ""
+
+                // More compact scorecard
+                val scorecard =
+                    "${team1Abbr} ${match.team1Runs}/${match.team1Wickets} (${formatOvers(match.team1Overs)}) vs ${team2Abbr} ${match.team2Runs}/${match.team2Wickets} (${
+                        formatOvers(match.team2Overs)
+                    })"
+
+                TopPlayer(
+                    "",
+                    scorecard,
+                    margin
+                )
+            }
+
+            statCategories.add(
+                StatCategory(
+                    "🏏 Match Results",
+                    "Scorecards and match outcomes",
+                    matchStatsList,
+                    matchStatsList
+                )
+            )
+        }
+    }
+
+    private fun getTeamAbbreviation(fullName: String): String {
+        return when {
+            fullName.contains("Australia", ignoreCase = true) -> "AUS"
+            fullName.contains("India", ignoreCase = true) -> "IND"
+            fullName.contains("England", ignoreCase = true) -> "ENG"
+            fullName.contains("Pakistan", ignoreCase = true) -> "PAK"
+            fullName.contains("New Zealand", ignoreCase = true) -> "NZ"
+            fullName.contains("South Africa", ignoreCase = true) -> "SA"
+            fullName.contains("Sri Lanka", ignoreCase = true) -> "SL"
+            fullName.contains("Bangladesh", ignoreCase = true) -> "BAN"
+            fullName.contains("West Indies", ignoreCase = true) -> "WI"
+            fullName.contains("Afghanistan", ignoreCase = true) -> "AFG"
+            fullName.contains("Computer", ignoreCase = true) -> "CPU"
+            else -> fullName.take(3).uppercase()
+        }
+    }
+
+    private fun formatOvers(overs: Double): String {
+        val fullOvers = overs.toInt()
+        val balls = ((overs - fullOvers) * 10).toInt()
+        return if (balls == 0) "$fullOvers" else "$fullOvers.$balls"
     }
 
     private fun updateUI() {
@@ -990,12 +1085,16 @@ class StatsFragment : Fragment() {
         val topBowler = players.values.maxByOrNull { it.wickets }
         val topTeam = teams.values.maxByOrNull { it.wins }
 
-        binding.tvTopBatsman.text = "🏏 Top Batsman: ${topBatsman?.name ?: "N/A"} (${topBatsman?.runs ?: 0} runs)"
-        binding.tvTopBowler.text = "🎯 Top Bowler: ${topBowler?.name ?: "N/A"} (${topBowler?.wickets ?: 0} wickets)"
-        binding.tvTopTeam.text = "🏆 Leading Team: ${topTeam?.name ?: "N/A"} (${topTeam?.wins ?: 0} wins)"
+        binding.tvTopBatsman.text =
+            "🏏 Top Batsman: ${topBatsman?.name ?: "N/A"} (${topBatsman?.runs ?: 0} runs)"
+        binding.tvTopBowler.text =
+            "🎯 Top Bowler: ${topBowler?.name ?: "N/A"} (${topBowler?.wickets ?: 0} wickets)"
+        binding.tvTopTeam.text =
+            "🏆 Leading Team: ${topTeam?.name ?: "N/A"} (${topTeam?.wins ?: 0} wins)"
 
         // Show tournament summary
-        binding.tvStatsCount.text = "${teams.size} Teams • ${players.size} Players • $totalMatches Matches"
+        binding.tvStatsCount.text =
+            "${teams.size} Teams • ${players.size} Players • $totalMatches Matches"
 
         // Show total runs in tournament
         val totalRuns = teams.values.sumOf { it.runsFor }
@@ -1005,11 +1104,9 @@ class StatsFragment : Fragment() {
     }
 
     private fun loadSampleData() {
-
         addSamplePlayers()
+        addSampleMatches()
     }
-
-
 
     private fun addSamplePlayers() {
         val samplePlayers = listOf(
@@ -1028,6 +1125,26 @@ class StatsFragment : Fragment() {
         }
     }
 
+    private fun addSampleMatches() {
+        // Add sample match summaries
+        matchSummaries.add(
+            MatchSummary(
+                "Pakistan", "India",
+                100, 6, 8.5,
+                98, 9, 10.0,
+                "Pakistan", "India"
+            )
+        )
+        matchSummaries.add(
+            MatchSummary(
+                "Australia", "England",
+                156, 4, 18.2,
+                155, 9, 20.0,
+                "Australia", "England"
+            )
+        )
+    }
+
     private fun extractRuns(line: String): Int {
         val pattern = """(\d+)\s*/""".toRegex()
         return pattern.find(line)?.groupValues?.get(1)?.toIntOrNull() ?: 0
@@ -1042,7 +1159,6 @@ class StatsFragment : Fragment() {
         val pattern = """/\s*(\d+)""".toRegex()
         return pattern.find(line)?.groupValues?.get(1)?.toIntOrNull() ?: 0
     }
-
 
     override fun onDestroyView() {
         super.onDestroyView()
@@ -1073,6 +1189,7 @@ class StatsAdapter : RecyclerView.Adapter<StatsAdapter.ViewHolder>() {
     }
 
     override fun getItemCount() = items.size
+
     inner class ViewHolder(private val binding: ItemStatCategoryBinding) :
         RecyclerView.ViewHolder(binding.root) {
 
@@ -1087,7 +1204,7 @@ class StatsAdapter : RecyclerView.Adapter<StatsAdapter.ViewHolder>() {
                 val intent = Intent(binding.root.context, DetailedStatsActivity::class.java).apply {
                     putExtra("CATEGORY_TITLE", category.title)
                     putExtra("CATEGORY_DESCRIPTION", category.description)
-                    putParcelableArrayListExtra("TOP_PLAYERS", ArrayList(category.allPlayers)) // Pass allPlayers
+                    putParcelableArrayListExtra("TOP_PLAYERS", ArrayList(category.allPlayers))
                 }
                 binding.root.context.startActivity(intent)
             }
@@ -1106,5 +1223,4 @@ class StatsAdapter : RecyclerView.Adapter<StatsAdapter.ViewHolder>() {
             }
         }
     }
-
 }

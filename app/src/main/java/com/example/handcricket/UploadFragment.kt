@@ -24,7 +24,8 @@ class UploadFragment : Fragment() {
         "Pakistan", "India", "Australia", "England",
         "South Africa", "New Zealand", "West Indies", "Sri Lanka",
         "Bangladesh", "Afghanistan", "Ireland", "Zimbabwe",
-        "Netherlands", "Scotland", "UAE", "Namibia"
+        "Netherlands", "Scotland", "UAE", "Namibia",
+        "USA", "Oman", "Nepal", "Italy"
     )
 
     private val defaultPlayers = mapOf(
@@ -43,7 +44,11 @@ class UploadFragment : Fragment() {
         "Netherlands" to "edwards,van der merwe,barresi",
         "Scotland" to "munsey,berrington,sharif",
         "UAE" to "waseem,kashif,meiyappan",
-        "Namibia" to "green,wiese,loftie-eaton"
+        "Namibia" to "green,wiese,loftie-eaton",
+        "USA" to "taylor,jones,kenjige",
+        "Oman" to "ailan,khalid,bilal",
+        "Nepal" to "lamichhane,khakurel,aryal",
+        "Italy" to "manenti,cooper,di giglio"
     )
 
     companion object {
@@ -195,9 +200,7 @@ class UploadFragment : Fragment() {
         }
 
         // Update the global teamMap (assuming it's accessible)
-        // You might need to make teamMap a mutable variable in your main activity or repository
         try {
-            // This is a placeholder - you'll need to implement this based on your app structure
             updateGlobalTeamMap(newTeamMap)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -205,20 +208,6 @@ class UploadFragment : Fragment() {
     }
 
     private fun updateGlobalTeamMap(newMap: Map<String, String>) {
-        // This method should update your global teamMap variable
-        // Implementation depends on where you store teamMap
-        // For example, if it's in a ViewModel or Repository:
-
-        // Option 1: If teamMap is in a ViewModel
-        // viewModel.updateTeamMap(newMap)
-
-        // Option 2: If teamMap is in a singleton object
-        // TeamRepository.updateTeamMap(newMap)
-
-        // Option 3: If teamMap is in shared preferences (as shown above)
-        // The data is already saved in shared preferences
-
-        // For now, we'll just show a toast
         android.widget.Toast.makeText(
             requireContext(),
             "Team mappings updated (${newMap.size} entries)",
