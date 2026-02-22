@@ -62,7 +62,7 @@
                         android:layout_height="wrap_content"
                         android:background="@drawable/bg_search_view"
                         app:iconifiedByDefault="false"
-                        app:queryHint="Search players..."
+                        app:queryHint="Search..."
                         android:layout_marginBottom="8dp" />
 
                     <TextView
@@ -72,7 +72,145 @@
                         android:text="50 entries"
                         android:textSize="12sp"
                         android:textColor="@color/gray_500"
-                        android:textStyle="italic" />
+                        android:textStyle="italic"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Divider -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/gray_200"
+                        android:layout_marginBottom="10dp" />
+
+                    <!-- Filter Label -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="FILTERS"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/gray_500"
+                        android:layout_marginBottom="10dp" />
+
+                    <!-- Team Filter Chips (Match Results) -->
+                    <HorizontalScrollView
+                        android:id="@+id/scrollTeams"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:scrollbars="none"
+                        android:visibility="gone"
+                        android:layout_marginBottom="8dp">
+
+                        <com.google.android.material.chip.ChipGroup
+                            android:id="@+id/chipGroupTeams"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            app:singleSelection="true"
+                            app:selectionRequired="true" />
+
+                    </HorizontalScrollView>
+
+                    <!-- Wins Filter (Team Standings) -->
+                    <LinearLayout
+                        android:id="@+id/layoutWinsFilter"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:visibility="gone"
+                        android:layout_marginBottom="8dp">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="180dp"
+                            android:layout_height="wrap_content"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etMinWins"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Min Wins"
+                                android:inputType="number" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </LinearLayout>
+
+                    <!-- Numeric Range Filter (player stat sections) -->
+                    <LinearLayout
+                        android:id="@+id/layoutNumericFilter"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:visibility="gone"
+                        android:layout_marginBottom="8dp">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                            android:layout_marginEnd="6dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etMinValue"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Greater than"
+                                android:inputType="numberDecimal" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense"
+                            android:layout_marginStart="6dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etMaxValue"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Less than"
+                                android:inputType="numberDecimal" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </LinearLayout>
+
+                    <!-- Wickets Filter (player stat sections) -->
+                    <LinearLayout
+                        android:id="@+id/layoutWicketsFilter"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:visibility="gone"
+                        android:layout_marginBottom="8dp">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="180dp"
+                            android:layout_height="wrap_content"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etMinWickets"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Min Wickets"
+                                android:inputType="number" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </LinearLayout>
+
+                    <!-- Clear Filter Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnClearFilter"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Clear Filters"
+                        android:textSize="12sp" />
 
                 </LinearLayout>
 
@@ -125,7 +263,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Try searching with different keywords"
+                    android:text="Try adjusting your search or filters"
                     android:textSize="14sp"
                     android:textColor="@color/gray_500"
                     android:gravity="center" />

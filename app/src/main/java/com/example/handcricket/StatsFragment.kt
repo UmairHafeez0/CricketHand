@@ -1201,9 +1201,22 @@ class StatsAdapter : RecyclerView.Adapter<StatsAdapter.ViewHolder>() {
             binding.playersLayout.removeAllViews()
 
             binding.btnViewAll.setOnClickListener {
+                val categoryType = when {
+                    category.title.contains("Match Results")  -> "MATCH_RESULTS"
+                    category.title.contains("Team Standings") -> "TEAM_STANDINGS"
+                    category.title.contains("Run Scorers")    -> "RUN_SCORERS"
+                    category.title.contains("Centuries")      -> "CENTURIES"
+                    category.title.contains("Wickets")        -> "WICKETS"
+                    category.title.contains("Strike Rate")    -> "STRIKE_RATE"
+                    category.title.contains("Boundary")       -> "BOUNDARIES"
+                    category.title.contains("Economy")        -> "ECONOMY"
+                    category.title.contains("Fantasy")        -> "FANTASY"
+                    else -> "GENERIC"
+                }
                 val intent = Intent(binding.root.context, DetailedStatsActivity::class.java).apply {
                     putExtra("CATEGORY_TITLE", category.title)
                     putExtra("CATEGORY_DESCRIPTION", category.description)
+                    putExtra("CATEGORY_TYPE", categoryType)
                     putParcelableArrayListExtra("TOP_PLAYERS", ArrayList(category.allPlayers))
                 }
                 binding.root.context.startActivity(intent)
