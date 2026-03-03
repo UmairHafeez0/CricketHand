@@ -265,6 +265,30 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Records Button Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginBottom="4dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="3dp"
+            app:cardBackgroundColor="@color/gold_dark">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnViewRecords"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🏅  View Tournament Records"
+                android:textColor="@color/white"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:paddingVertical="14dp"
+                style="@style/Widget.Material3.Button.TextButton"
+                app:rippleColor="#33FFFFFF" />
+
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Stats Categories Title -->
         <TextView
             android:layout_width="match_parent"

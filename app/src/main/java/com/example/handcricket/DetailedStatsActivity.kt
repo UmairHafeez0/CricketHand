@@ -1,9 +1,7 @@
 package com.example.handcricket
 
-import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
-import android.os.Parcel
-import android.os.Parcelable
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
@@ -35,7 +33,6 @@ class DetailedStatsActivity : AppCompatActivity() {
         allPlayers = intent.getParcelableArrayListExtra<TopPlayer>("TOP_PLAYERS") ?: emptyList()
         categoryType = intent.getStringExtra("CATEGORY_TYPE") ?: "GENERIC"
 
-        // Setup toolbar
         setSupportActionBar(binding.toolbar)
         supportActionBar?.apply {
             setDisplayHomeAsUpEnabled(true)
@@ -47,15 +44,35 @@ class DetailedStatsActivity : AppCompatActivity() {
         binding.tvDescription.text = description
         binding.tvTotalCount.text = "${allPlayers.size} entries"
 
-        // Setup RecyclerView
-        adapter = DetailedStatsAdapter()
+        // Adapter with row-click routing
+        adapter = DetailedStatsAdapter { player ->
+            when (categoryType) {
+                "MATCH_RESULTS" -> { /* scorecards — no profile */ }
+                "TEAM_STANDINGS" -> {
+                    // name is "1. Pakistan" → extract team name
+                    val teamName = player.name.substringAfter(". ").trim()
+                    if (teamName.isNotEmpty()) {
+                        startActivity(Intent(this, TeamProfileActivity::class.java).apply {
+                            putExtra("TEAM_NAME", teamName)
+                        })
+                    }
+                }
+                else -> {
+                    if (player.name.isNotEmpty()) {
+                        startActivity(Intent(this, PlayerProfileActivity::class.java).apply {
+                            putExtra("PLAYER_NAME", player.name)
+                        })
+                    }
+                }
+            }
+        }
+
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
         adapter.submitList(allPlayers)
 
         setupFilters()
 
-        // Search listener
         binding.searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean { applyFilters(); return true }
             override fun onQueryTextChange(newText: String?): Boolean { applyFilters(); return true }
@@ -78,32 +95,24 @@ class DetailedStatsActivity : AppCompatActivity() {
                 binding.scrollTeams.visibility = View.VISIBLE
                 setupTeamChips()
             }
-
             "TEAM_STANDINGS" -> {
                 binding.layoutWinsFilter.visibility = View.VISIBLE
                 binding.etMinWins.addTextChangedListener(watcher)
             }
-
             "WICKETS" -> {
-                // Primary value IS wickets — use the numeric range filter labelled for wickets
                 binding.layoutNumericFilter.visibility = View.VISIBLE
                 binding.etMinValue.hint = "Min Wickets"
                 binding.etMaxValue.hint = "Max Wickets"
                 binding.etMinValue.addTextChangedListener(watcher)
                 binding.etMaxValue.addTextChangedListener(watcher)
             }
-
             "GENERIC" -> { /* no extra filters */ }
-
             else -> {
-                // All other player stat sections: value range + optional wickets
                 binding.layoutNumericFilter.visibility = View.VISIBLE
                 binding.layoutWicketsFilter.visibility = View.VISIBLE
-
                 val hint = valueHintFor(categoryType)
                 binding.etMinValue.hint = "Min $hint"
                 binding.etMaxValue.hint = "Max $hint"
-
                 binding.etMinValue.addTextChangedListener(watcher)
                 binding.etMaxValue.addTextChangedListener(watcher)
                 binding.etMinWickets.addTextChangedListener(watcher)
@@ -123,7 +132,6 @@ class DetailedStatsActivity : AppCompatActivity() {
         else           -> "Value"
     }
 
-    // Build team chips by parsing the "PAK ... vs IND ..." value strings
     private fun setupTeamChips() {
         val teams = mutableSetOf<String>()
         allPlayers.forEach { player ->
@@ -135,29 +143,16 @@ class DetailedStatsActivity : AppCompatActivity() {
             }
         }
 
-        // "All" chip
-        val allChip = Chip(this).apply {
-            text = "All"
-            isCheckable = true
-            isChecked = true
-        }
+        val allChip = Chip(this).apply { text = "All"; isCheckable = true; isChecked = true }
         binding.chipGroupTeams.addView(allChip)
 
         teams.sorted().forEach { abbr ->
-            val chip = Chip(this).apply {
-                text = abbr
-                isCheckable = true
-            }
-            binding.chipGroupTeams.addView(chip)
+            binding.chipGroupTeams.addView(Chip(this).apply { text = abbr; isCheckable = true })
         }
 
         binding.chipGroupTeams.setOnCheckedStateChangeListener { group, checkedIds ->
-            if (checkedIds.isEmpty()) {
-                selectedTeamFilter = "All"
-            } else {
-                val checkedChip = group.findViewById<Chip>(checkedIds[0])
-                selectedTeamFilter = checkedChip?.text?.toString() ?: "All"
-            }
+            selectedTeamFilter = if (checkedIds.isEmpty()) "All"
+            else group.findViewById<Chip>(checkedIds[0])?.text?.toString() ?: "All"
             applyFilters()
         }
     }
@@ -167,7 +162,6 @@ class DetailedStatsActivity : AppCompatActivity() {
     private fun applyFilters() {
         var list = allPlayers
 
-        // Text search
         val query = binding.searchView.query?.toString() ?: ""
         if (query.isNotEmpty()) {
             list = list.filter { p ->
@@ -177,14 +171,12 @@ class DetailedStatsActivity : AppCompatActivity() {
             }
         }
 
-        // Category-specific filters
         when (categoryType) {
             "MATCH_RESULTS" -> {
                 if (selectedTeamFilter != "All") {
                     list = list.filter { it.value.contains(selectedTeamFilter, ignoreCase = true) }
                 }
             }
-
             "TEAM_STANDINGS" -> {
                 val minWins = binding.etMinWins.text?.toString()?.toIntOrNull()
                 if (minWins != null) {
@@ -194,7 +186,6 @@ class DetailedStatsActivity : AppCompatActivity() {
                     }
                 }
             }
-
             "WICKETS" -> {
                 val minV = binding.etMinValue.text?.toString()?.toDoubleOrNull()
                 val maxV = binding.etMaxValue.text?.toString()?.toDoubleOrNull()
@@ -205,9 +196,7 @@ class DetailedStatsActivity : AppCompatActivity() {
                     }
                 }
             }
-
-            "GENERIC" -> { /* only text search applies */ }
-
+            "GENERIC" -> {}
             else -> {
                 val minV = binding.etMinValue.text?.toString()?.toDoubleOrNull()
                 val maxV = binding.etMaxValue.text?.toString()?.toDoubleOrNull()
@@ -233,23 +222,13 @@ class DetailedStatsActivity : AppCompatActivity() {
         updateEmptyState(list.isEmpty())
     }
 
-    // ── Value extraction helpers ──────────────────────────────────────────────
-
-    /** Extract the primary numeric value for range filtering */
     private fun extractPrimaryValue(player: TopPlayer): Double? = when (categoryType) {
-        // "450 runs (300 balls)" → 450
         "RUN_SCORERS"  -> Regex("^(\\d+)").find(player.value)?.groupValues?.get(1)?.toDoubleOrNull()
-        // "15 wickets" → 15
         "WICKETS"      -> Regex("^(\\d+)").find(player.value)?.groupValues?.get(1)?.toDoubleOrNull()
-        // "SR: 150.00" → 150.00
         "STRIKE_RATE"  -> Regex("SR:\\s*([\\d.]+)").find(player.value)?.groupValues?.get(1)?.toDoubleOrNull()
-        // details = "Total: 57 boundaries • …" → 57
         "BOUNDARIES"   -> Regex("Total:\\s*(\\d+)").find(player.details)?.groupValues?.get(1)?.toDoubleOrNull()
-        // "Econ: 6.50" → 6.50
         "ECONOMY"      -> Regex("Econ:\\s*([\\d.]+)").find(player.value)?.groupValues?.get(1)?.toDoubleOrNull()
-        // "450 pts" → 450
         "FANTASY"      -> Regex("^(\\d+)").find(player.value)?.groupValues?.get(1)?.toDoubleOrNull()
-        // "1x100s, 3x50s" → total milestones (centuries + half-centuries)
         "CENTURIES"    -> {
             val c = Regex("(\\d+)x100s").find(player.value)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             val h = Regex("(\\d+)x50s").find(player.value)?.groupValues?.get(1)?.toIntOrNull() ?: 0
@@ -258,29 +237,20 @@ class DetailedStatsActivity : AppCompatActivity() {
         else -> null
     }
 
-    /** Extract wickets count from value or details for cross-category filtering */
     private fun extractWicketsValue(player: TopPlayer): Int? {
-        // "15 wickets" (Wickets section)
         Regex("^(\\d+)\\s*wickets?", RegexOption.IGNORE_CASE)
             .find(player.value)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
-        // "450R • 15W • …" (Fantasy details)
         Regex("\\b(\\d+)W\\b")
             .find(player.details)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
         return null
     }
 
-    // ── Clear filters ─────────────────────────────────────────────────────────
-
     private fun clearFilters() {
         binding.searchView.setQuery("", false)
         selectedTeamFilter = "All"
-
-        // Reset team chips to "All"
         for (i in 0 until binding.chipGroupTeams.childCount) {
-            val chip = binding.chipGroupTeams.getChildAt(i) as? Chip
-            chip?.isChecked = (i == 0)
+            (binding.chipGroupTeams.getChildAt(i) as? Chip)?.isChecked = (i == 0)
         }
-
         binding.etMinWins.text?.clear()
         binding.etMinValue.text?.clear()
         binding.etMaxValue.text?.clear()
@@ -297,7 +267,9 @@ class DetailedStatsActivity : AppCompatActivity() {
     }
 }
 
-class DetailedStatsAdapter : RecyclerView.Adapter<DetailedStatsAdapter.ViewHolder>() {
+class DetailedStatsAdapter(
+    private val onItemClick: (TopPlayer) -> Unit = {}
+) : RecyclerView.Adapter<DetailedStatsAdapter.ViewHolder>() {
 
     private val items = mutableListOf<TopPlayer>()
 
@@ -308,9 +280,7 @@ class DetailedStatsAdapter : RecyclerView.Adapter<DetailedStatsAdapter.ViewHolde
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val binding = ItemTopPlayerBinding.inflate(
-            LayoutInflater.from(parent.context), parent, false
-        )
+        val binding = ItemTopPlayerBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return ViewHolder(binding)
     }
 
@@ -320,14 +290,16 @@ class DetailedStatsAdapter : RecyclerView.Adapter<DetailedStatsAdapter.ViewHolde
 
     override fun getItemCount() = items.size
 
-    class ViewHolder(private val binding: ItemTopPlayerBinding) :
+    inner class ViewHolder(private val binding: ItemTopPlayerBinding) :
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(player: TopPlayer, rank: Int) {
-            binding.tvRank.text = rank.toString()
-            binding.tvPlayerName.text = player.name
+            binding.tvRank.text        = rank.toString()
+            binding.tvPlayerName.text  = player.name
             binding.tvPlayerValue.text = player.value
             binding.tvPlayerDetails.text = player.details
+
+            binding.root.setOnClickListener { onItemClick(player) }
         }
     }
 }

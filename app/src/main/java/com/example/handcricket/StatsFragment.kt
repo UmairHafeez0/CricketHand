@@ -34,7 +34,12 @@ data class TeamStats(
     var wicketsTaken: Int = 0,
     var runsAgainst: Int = 0,
     var oversBowled: Double = 0.0,
-    var nrr: Double = 0.0
+    var nrr: Double = 0.0,
+    val winsAgainstTeam: MutableMap<String, Int> = mutableMapOf(),
+    val lossesAgainstTeam: MutableMap<String, Int> = mutableMapOf(),
+    var highestTeamScore: Int = 0,
+    var highestMarginWinRuns: Int = 0,
+    var highestMarginWinAgainst: String = ""
 )
 
 data class PlayerStats(
@@ -56,7 +61,19 @@ data class PlayerStats(
     var battingAverage: Double = 0.0,
     var bowlingAverage: Double = 0.0,
     var economy: Double = 0.0,
-    var fantasyPoints: Int = 0
+    var fantasyPoints: Int = 0,
+    // Extended profile fields
+    var team: String = "Unknown",
+    var innings: Int = 0,
+    var thirties: Int = 0,
+    var ducks: Int = 0,
+    var threeWicketHauls: Int = 0,
+    var fourWicketHauls: Int = 0,
+    var fiveWicketHauls: Int = 0,
+    var bowlingStrikeRate: Double = 0.0,
+    val runsAgainstTeam: MutableMap<String, Int> = mutableMapOf(),
+    val wicketsAgainstTeam: MutableMap<String, Int> = mutableMapOf(),
+    val matchesAgainstTeam: MutableMap<String, Int> = mutableMapOf()
 )
 
 data class MatchPerformance(
@@ -441,6 +458,8 @@ class StatsFragment : Fragment() {
     private val matchPerformances = mutableListOf<MatchPerformance>()
     private val matchSummaries = mutableListOf<MatchSummary>()
     private val statCategories = mutableListOf<StatCategory>()
+    /** Tracks unique match IDs per player to compute accurate match counts */
+    private val playerMatchIds = mutableMapOf<String, MutableSet<Int>>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -560,6 +579,7 @@ class StatsFragment : Fragment() {
             team.oversBowled += team2Overs
             team.wicketsTaken += team2Wickets
             team.wicketsLost += team1Wickets
+            if (team1Runs > team.highestTeamScore) team.highestTeamScore = team1Runs
         }
 
         teams[team2Name]?.let { team ->
@@ -571,11 +591,25 @@ class StatsFragment : Fragment() {
             team.oversBowled += team1Overs
             team.wicketsTaken += team1Wickets
             team.wicketsLost += team2Wickets
+            if (team2Runs > team.highestTeamScore) team.highestTeamScore = team2Runs
         }
 
-        // Process player batting
-        processBattingStats(lines, team1Index + 2, matchId)
-        processBattingStats(lines, team2Index + 2, matchId)
+        // Head-to-head tracking
+        teams[winner]?.winsAgainstTeam?.merge(loser, 1, Int::plus)
+        teams[loser]?.lossesAgainstTeam?.merge(winner, 1, Int::plus)
+
+        // Highest win margin (by run difference)
+        val margin = Math.abs(team1Runs - team2Runs)
+        teams[winner]?.let { w ->
+            if (margin > w.highestMarginWinRuns) {
+                w.highestMarginWinRuns = margin
+                w.highestMarginWinAgainst = loser
+            }
+        }
+
+        // Process player batting (pass team context)
+        processBattingStats(lines, team1Index + 2, matchId, team1Name, team2Name)
+        processBattingStats(lines, team2Index + 2, matchId, team2Name, team1Name)
 
         // Process bowling stats
         val bowlIndices = lines.mapIndexedNotNull { index, line ->
@@ -583,6 +617,11 @@ class StatsFragment : Fragment() {
         }
 
         bowlIndices.forEach { headerIndex ->
+            // Bowling section before team2Index → team2 bowlers bowling vs team1
+            // Bowling section after team2Index  → team1 bowlers bowling vs team2
+            val bowlerTeam = if (team2Index < 0 || headerIndex < team2Index) team2Name else team1Name
+            val battingTeam = if (team2Index < 0 || headerIndex < team2Index) team1Name else team2Name
+
             for (j in headerIndex + 1..headerIndex + 6) {
                 if (j >= lines.size) break
                 val row = lines[j].split(",")
@@ -601,14 +640,23 @@ class StatsFragment : Fragment() {
                         wickets = wickets,
                         overs = overs,
                         runsConceded = runsConceded,
-                        matchId = matchId
+                        matchId = matchId,
+                        playerTeam = bowlerTeam,
+                        opposingTeam = battingTeam,
+                        trackBatting = false
                     )
                 }
             }
         }
     }
 
-    private fun processBattingStats(lines: List<String>, startIndex: Int, matchId: Int) {
+    private fun processBattingStats(
+        lines: List<String>,
+        startIndex: Int,
+        matchId: Int,
+        playerTeam: String = "Unknown",
+        opposingTeam: String = ""
+    ) {
         for (i in startIndex until startIndex + 11) {
             if (i >= lines.size) break
             val row = lines[i].split(",")
@@ -626,7 +674,10 @@ class StatsFragment : Fragment() {
                 balls = balls,
                 fours = fours,
                 sixes = sixes,
-                matchId = matchId
+                matchId = matchId,
+                playerTeam = playerTeam,
+                opposingTeam = opposingTeam,
+                trackBatting = true
             )
         }
     }
@@ -689,7 +740,10 @@ class StatsFragment : Fragment() {
         wickets: Int = 0,
         overs: Double = 0.0,
         runsConceded: Int = 0,
-        matchId: Int? = null
+        matchId: Int? = null,
+        playerTeam: String = "Unknown",
+        opposingTeam: String = "",
+        trackBatting: Boolean = false
     ) {
         var player = players[name]
         if (player == null) {
@@ -697,101 +751,124 @@ class StatsFragment : Fragment() {
             players[name] = player
         }
 
-        // Update batting stats
-        player.runs += runs
-        player.balls += balls
-        player.fours += fours
-        player.sixes += sixes
-
-        if (runs > player.highestScore) {
-            player.highestScore = runs
-        }
-        if (runs >= 100) {
-            player.centuries++
-        } else if (runs >= 50) {
-            player.halfCenturies++
+        // Set team (first time we see this player in a known team)
+        if (player.team == "Unknown" && playerTeam != "Unknown") {
+            player.team = playerTeam
         }
 
-        // Update bowling stats
+        // Track unique match participation
+        if (matchId != null) {
+            playerMatchIds.getOrPut(name) { mutableSetOf() }.add(matchId)
+        }
+
+        // ── Batting stats (only from batting rows) ────────────────────────────
+        if (trackBatting) {
+            player.innings++
+            player.runs += runs
+            player.balls += balls
+            player.fours += fours
+            player.sixes += sixes
+
+            if (runs > player.highestScore) player.highestScore = runs
+
+            when {
+                runs >= 100           -> player.centuries++
+                runs >= 50            -> player.halfCenturies++
+                runs in 30..49        -> player.thirties++
+                runs == 0 && balls > 0 -> player.ducks++      // faced a ball but scored 0
+            }
+
+            if (opposingTeam.isNotEmpty()) {
+                player.runsAgainstTeam[opposingTeam] =
+                    (player.runsAgainstTeam[opposingTeam] ?: 0) + runs
+                player.matchesAgainstTeam[opposingTeam] =
+                    (player.matchesAgainstTeam[opposingTeam] ?: 0) + 1
+            }
+        }
+
+        // ── Bowling stats ─────────────────────────────────────────────────────
         player.wickets += wickets
         player.overs += overs
         player.runsGiven += runsConceded
 
         if (wickets > 0) {
+            when {
+                wickets >= 5 -> player.fiveWicketHauls++
+                wickets >= 4 -> player.fourWicketHauls++
+                wickets >= 3 -> player.threeWicketHauls++
+            }
             if (wickets > player.bestBowlingWickets ||
                 (wickets == player.bestBowlingWickets && runsConceded < player.bestBowlingRuns)
             ) {
                 player.bestBowlingWickets = wickets
                 player.bestBowlingRuns = runsConceded
             }
-        }
-
-        if (matchId != null) {
-            player.matches++
+            if (opposingTeam.isNotEmpty()) {
+                player.wicketsAgainstTeam[opposingTeam] =
+                    (player.wicketsAgainstTeam[opposingTeam] ?: 0) + wickets
+            }
         }
 
         // Store match performance
         if (matchId != null) {
             matchPerformances.add(
-                MatchPerformance(
-                    name,
-                    matchId,
-                    runs,
-                    balls,
-                    fours,
-                    sixes,
-                    wickets,
-                    overs,
-                    runsConceded
-                )
+                MatchPerformance(name, matchId, runs, balls, fours, sixes, wickets, overs, runsConceded)
             )
         }
     }
 
     private fun calculateStatistics() {
+        // Fix match counts using unique match ID tracking (avoids double-counting bat+bowl)
+        players.forEach { (name, player) ->
+            playerMatchIds[name]?.size?.let { count ->
+                if (count > 0) player.matches = count
+            }
+        }
+
         // Calculate NRR for teams
         teams.values.forEach { team ->
             if (team.matches > 0) {
-                // Calculate runs per over for batting
-                val runsPerOverFor = if (team.oversFaced > 0) {
-                    team.runsFor / team.oversFaced
-                } else 0.0
-
-                // Calculate runs per over against
-                val runsPerOverAgainst = if (team.oversBowled > 0) {
-                    team.runsAgainst / team.oversBowled
-                } else 0.0
-
-                // Calculate NRR
+                val runsPerOverFor = if (team.oversFaced > 0) team.runsFor / team.oversFaced else 0.0
+                val runsPerOverAgainst = if (team.oversBowled > 0) team.runsAgainst / team.oversBowled else 0.0
                 team.nrr = runsPerOverFor - runsPerOverAgainst
             }
         }
 
         // Calculate player stats
         players.values.forEach { player ->
-            // Batting stats
-            player.strikeRate = if (player.balls > 0) {
-                (player.runs.toDouble() / player.balls * 100)
-            } else 0.0
-
-            // Batting average (runs per dismissal - simplified)
+            player.strikeRate = if (player.balls > 0) player.runs.toDouble() / player.balls * 100 else 0.0
             val dismissals = player.matches.coerceAtLeast(1)
             player.battingAverage = player.runs.toDouble() / dismissals
-
-            // Bowling stats
-            player.bowlingAverage = if (player.wickets > 0) {
-                player.runsGiven.toDouble() / player.wickets
-            } else 0.0
-
-            player.economy = if (player.overs > 0) {
-                player.runsGiven.toDouble() / player.overs
-            } else 0.0
-
-            // Fantasy points
+            player.bowlingAverage = if (player.wickets > 0) player.runsGiven.toDouble() / player.wickets else 0.0
+            player.economy = if (player.overs > 0) player.runsGiven.toDouble() / player.overs else 0.0
+            player.bowlingStrikeRate = if (player.wickets > 0) (player.overs * 6) / player.wickets else 0.0
             player.fantasyPoints = calculateFantasyPoints(player)
         }
 
         createStatCategories()
+
+        // ── Populate AppDataStore for profile screens ─────────────────────────
+        AppDataStore.teams = teams.toMap()
+        AppDataStore.players = players.toMap()
+        AppDataStore.matchSummaries = matchSummaries.toList()
+        AppDataStore.matchPerformances = matchPerformances.toList()
+
+        AppDataStore.battingRanks = players.values
+            .filter { it.runs > 0 }
+            .sortedByDescending { it.runs }
+            .mapIndexed { i, p -> p.name to (i + 1) }
+            .toMap()
+
+        AppDataStore.bowlingRanks = players.values
+            .filter { it.wickets > 0 }
+            .sortedWith(compareByDescending<PlayerStats> { it.wickets }.thenBy { it.economy })
+            .mapIndexed { i, p -> p.name to (i + 1) }
+            .toMap()
+
+        AppDataStore.teamRanks = teams.values
+            .sortedWith(compareByDescending<TeamStats> { it.wins }.thenByDescending { it.nrr })
+            .mapIndexed { i, t -> t.name to (i + 1) }
+            .toMap()
     }
 
     private fun calculateFantasyPoints(player: PlayerStats): Int {
@@ -1101,6 +1178,11 @@ class StatsFragment : Fragment() {
         binding.tvTotalRuns.text = "Total Runs Scored: $totalRuns"
 
         adapter.submitList(statCategories)
+
+        // Wire up Records button
+        binding.btnViewRecords.setOnClickListener {
+            startActivity(android.content.Intent(requireContext(), RecordsActivity::class.java))
+        }
     }
 
     private fun loadSampleData() {
@@ -1126,23 +1208,32 @@ class StatsFragment : Fragment() {
     }
 
     private fun addSampleMatches() {
+        // Assign teams to sample players
+        players["Virat Kohli"]?.team = "India"
+        players["Jasprit Bumrah"]?.team = "India"
+        players["David Warner"]?.team = "Australia"
+        players["Pat Cummins"]?.team = "Australia"
+        players["Jos Buttler"]?.team = "England"
+        players["Saim Ayub"]?.team = "Pakistan"
+        players["Kane Williamson"]?.team = "New Zealand"
+        players["Trent Boult"]?.team = "New Zealand"
+
+        // Initialize sample teams
+        addTeam("Pakistan"); addTeam("India"); addTeam("Australia")
+        addTeam("England"); addTeam("New Zealand")
+        teams["Pakistan"]?.apply { wins = 1; losses = 0; matches = 1; runsFor = 100; runsAgainst = 98; oversFaced = 8.5; oversBowled = 10.0; highestTeamScore = 100 }
+        teams["India"]?.apply   { wins = 0; losses = 1; matches = 1; runsFor = 98;  runsAgainst = 100; oversFaced = 10.0; oversBowled = 8.5; highestTeamScore = 98 }
+        teams["Australia"]?.apply { wins = 1; losses = 0; matches = 1; runsFor = 156; runsAgainst = 155; oversFaced = 18.2; oversBowled = 20.0; highestTeamScore = 156 }
+        teams["England"]?.apply   { wins = 0; losses = 1; matches = 1; runsFor = 155; runsAgainst = 156; oversFaced = 20.0; oversBowled = 18.2; highestTeamScore = 155 }
+
+        teams["Pakistan"]?.winsAgainstTeam?.put("India", 1)
+        teams["India"]?.lossesAgainstTeam?.put("Pakistan", 1)
+        teams["Australia"]?.winsAgainstTeam?.put("England", 1)
+        teams["England"]?.lossesAgainstTeam?.put("Australia", 1)
+
         // Add sample match summaries
-        matchSummaries.add(
-            MatchSummary(
-                "Pakistan", "India",
-                100, 6, 8.5,
-                98, 9, 10.0,
-                "Pakistan", "India"
-            )
-        )
-        matchSummaries.add(
-            MatchSummary(
-                "Australia", "England",
-                156, 4, 18.2,
-                155, 9, 20.0,
-                "Australia", "England"
-            )
-        )
+        matchSummaries.add(MatchSummary("Pakistan", "India",   100, 6, 8.5, 98, 9, 10.0, "Pakistan", "India"))
+        matchSummaries.add(MatchSummary("Australia", "England", 156, 4, 18.2, 155, 9, 20.0, "Australia", "England"))
     }
 
     private fun extractRuns(line: String): Int {
