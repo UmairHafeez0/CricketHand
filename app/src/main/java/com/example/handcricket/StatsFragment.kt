@@ -1099,15 +1099,15 @@ class StatsFragment : Fragment() {
                 TopPlayer(
                     "",
                     scorecard,
-                    "MATCHID:${index + 1}|${match.winner} won"
+                    ""
                 )
             }
 
             statCategories.add(
                 StatCategory(
                     "🏏 Match Results",
-                    "Scorecards and match outcomes",
-                    matchStatsList,
+                    "${matchStatsList.size} matches  •  Tap VIEW ALL to see all scorecards",
+                    emptyList(),
                     matchStatsList
                 )
             )
