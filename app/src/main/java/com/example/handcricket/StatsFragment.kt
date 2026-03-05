@@ -1099,7 +1099,7 @@ class StatsFragment : Fragment() {
                 TopPlayer(
                     "",
                     scorecard,
-                    margin
+                    "MATCHID:${index + 1}|${match.winner} won"
                 )
             }
 
@@ -1182,6 +1182,11 @@ class StatsFragment : Fragment() {
         // Wire up Records button
         binding.btnViewRecords.setOnClickListener {
             startActivity(android.content.Intent(requireContext(), RecordsActivity::class.java))
+        }
+
+        // Wire up Teams & Players button
+        binding.btnTeamsPlayers.setOnClickListener {
+            startActivity(android.content.Intent(requireContext(), TeamsPlayersActivity::class.java))
         }
     }
 

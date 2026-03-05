@@ -30,6 +30,9 @@
         <activity android:name=".PlayerProfileActivity" />
         <activity android:name=".TeamProfileActivity" />
         <activity android:name=".RecordsActivity" />
+        <activity android:name=".TeamVsTeamActivity" />
+        <activity android:name=".MatchScorecardActivity" />
+        <activity android:name=".TeamsPlayersActivity" />
 
     </application>
 

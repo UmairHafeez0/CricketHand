@@ -82,6 +82,23 @@ class TeamProfileActivity : AppCompatActivity() {
             return
         }
 
+        val totalLabel = makeText("TOTAL", weight = 1f,
+            color = getColor(R.color.gray_500), gravity = android.view.Gravity.CENTER)
+        totalLabel.textSize = 10f
+        val headerRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4))
+        }
+        headerRow.addView(makeText("", weight = 2f))
+        headerRow.addView(makeText("W", weight = 1f, color = getColor(R.color.gray_500),
+            gravity = android.view.Gravity.CENTER).also { it.textSize = 10f })
+        headerRow.addView(makeText("L", weight = 1f, color = getColor(R.color.gray_500),
+            gravity = android.view.Gravity.CENTER).also { it.textSize = 10f })
+        headerRow.addView(makeText("▶", weight = 0.6f, color = getColor(R.color.gray_500),
+            gravity = android.view.Gravity.CENTER).also { it.textSize = 10f })
+
         allOpponents.forEach { opponent ->
             val w = t.winsAgainstTeam[opponent] ?: 0
             val l = t.lossesAgainstTeam[opponent] ?: 0
@@ -93,11 +110,25 @@ class TeamProfileActivity : AppCompatActivity() {
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
                 setPadding(dpToPx(4), dpToPx(9), dpToPx(4), dpToPx(9))
+                isClickable = true
+                isFocusable = true
+                background = android.util.TypedValue().also { tv ->
+                    theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+                }.resourceId.let { getDrawable(it) }
+                setOnClickListener {
+                    startActivity(
+                        android.content.Intent(this@TeamProfileActivity, TeamVsTeamActivity::class.java)
+                            .putExtra("TEAM1_NAME", t.name)
+                            .putExtra("TEAM2_NAME", opponent)
+                    )
+                }
             }
 
             row.addView(makeText(opponent, weight = 2f, bold = true))
             row.addView(makeText("$w", weight = 1f, color = getColor(R.color.success), gravity = android.view.Gravity.CENTER))
             row.addView(makeText("$l", weight = 1f, color = getColor(R.color.error),   gravity = android.view.Gravity.CENTER))
+            row.addView(makeText("›", weight = 0.6f, color = getColor(R.color.purple_500),
+                gravity = android.view.Gravity.CENTER).also { it.textSize = 16f })
 
             binding.containerH2H.addView(row)
             addThinDivider(binding.containerH2H)
@@ -127,7 +158,8 @@ class TeamProfileActivity : AppCompatActivity() {
         if (batsmen.isNotEmpty()) {
             addSectionLabel(c, "🏏 Top Batsmen")
             batsmen.forEachIndexed { idx, p ->
-                addRow(c, "${idx + 1}. ${p.name}", "${p.runs} runs (Avg: ${"%.1f".format(p.battingAverage)})")
+                addClickableRow(c, "${idx + 1}. ${p.name}",
+                    "${p.runs} runs (Avg: ${"%.1f".format(p.battingAverage)})", p.name)
             }
             addDivider(c)
         }
@@ -137,15 +169,28 @@ class TeamProfileActivity : AppCompatActivity() {
         if (bowlers.isNotEmpty()) {
             addSectionLabel(c, "🎯 Top Bowlers")
             bowlers.forEachIndexed { idx, p ->
-                addRow(c, "${idx + 1}. ${p.name}", "${p.wickets} wkts (Econ: ${"%.2f".format(p.economy)})")
+                addClickableRow(c, "${idx + 1}. ${p.name}",
+                    "${p.wickets} wkts (Econ: ${"%.2f".format(p.economy)})", p.name)
             }
         }
 
-        // Click on player names → open PlayerProfileActivity
-        batsmen.forEach { p ->
-            // Players are shown as rows, make the card clickable in general;
-            // actual per-row click is handled in the adapter-based screens.
+        // "View all team players" button
+        addDivider(c)
+        val viewAllBtn = com.google.android.material.button.MaterialButton(this,
+            null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
+            text = "👥 View All Team Players"
+            textSize = 13f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.topMargin = dpToPx(4) }
+            setOnClickListener {
+                startActivity(
+                    android.content.Intent(this@TeamProfileActivity, TeamsPlayersActivity::class.java)
+                )
+            }
         }
+        c.addView(viewAllBtn)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -197,6 +242,24 @@ class TeamProfileActivity : AppCompatActivity() {
         setTextColor(color)
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, weight)
+    }
+
+    private fun addClickableRow(container: LinearLayout, label: String, value: String, playerName: String) {
+        val b = ItemStatRowBinding.inflate(layoutInflater, container, false)
+        b.tvLabel.text = label
+        b.tvValue.text = value
+        b.root.isClickable = true
+        b.root.isFocusable = true
+        b.root.background = android.util.TypedValue().also { tv ->
+            theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+        }.resourceId.let { getDrawable(it) }
+        b.root.setOnClickListener {
+            startActivity(
+                android.content.Intent(this, PlayerProfileActivity::class.java)
+                    .putExtra("PLAYER_NAME", playerName)
+            )
+        }
+        container.addView(b.root)
     }
 
     private fun dpToPx(dp: Int): Int =

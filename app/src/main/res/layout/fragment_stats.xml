@@ -265,29 +265,63 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Records Button Card -->
-        <com.google.android.material.card.MaterialCardView
+        <!-- Quick Action Buttons Row -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:orientation="horizontal"
             android:layout_marginHorizontal="8dp"
-            android:layout_marginBottom="4dp"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="3dp"
-            app:cardBackgroundColor="@color/gold_dark">
+            android:layout_marginBottom="4dp">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnViewRecords"
-                android:layout_width="match_parent"
+            <!-- Records Button -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="🏅  View Tournament Records"
-                android:textColor="@color/white"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:paddingVertical="14dp"
-                style="@style/Widget.Material3.Button.TextButton"
-                app:rippleColor="#33FFFFFF" />
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/gold_dark">
 
-        </com.google.android.material.card.MaterialCardView>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnViewRecords"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🏅 Records"
+                    android:textColor="@color/white"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:paddingVertical="14dp"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    app:rippleColor="#33FFFFFF" />
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Teams & Players Button -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="@color/purple_700">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTeamsPlayers"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="👥 Teams"
+                    android:textColor="@color/white"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:paddingVertical="14dp"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    app:rippleColor="#33FFFFFF" />
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
 
         <!-- Stats Categories Title -->
         <TextView

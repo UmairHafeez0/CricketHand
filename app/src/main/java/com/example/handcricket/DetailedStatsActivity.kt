@@ -22,6 +22,8 @@ class DetailedStatsActivity : AppCompatActivity() {
     private var allPlayers = listOf<TopPlayer>()
     private var categoryType = "GENERIC"
     private var selectedTeamFilter = "All"
+    private var showAllMatches = false
+    private val SHOW_MORE_SENTINEL = "__MORE__"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,7 +49,22 @@ class DetailedStatsActivity : AppCompatActivity() {
         // Adapter with row-click routing
         adapter = DetailedStatsAdapter { player ->
             when (categoryType) {
-                "MATCH_RESULTS" -> { /* scorecards — no profile */ }
+                "MATCH_RESULTS" -> {
+                    if (player.name == SHOW_MORE_SENTINEL) {
+                        showAllMatches = true
+                        applyFilters()
+                    } else {
+                        // Parse matchId from details "MATCHID:5|Pakistan won"
+                        val matchId = Regex("MATCHID:(\\d+)").find(player.details)
+                            ?.groupValues?.get(1)?.toIntOrNull()
+                        if (matchId != null) {
+                            startActivity(
+                                Intent(this, MatchScorecardActivity::class.java)
+                                    .putExtra("MATCH_ID", matchId)
+                            )
+                        }
+                    }
+                }
                 "TEAM_STANDINGS" -> {
                     // name is "1. Pakistan" → extract team name
                     val teamName = player.name.substringAfter(". ").trim()
@@ -176,6 +193,13 @@ class DetailedStatsActivity : AppCompatActivity() {
                 if (selectedTeamFilter != "All") {
                     list = list.filter { it.value.contains(selectedTeamFilter, ignoreCase = true) }
                 }
+                // Limit to 10 unless "Show All" tapped
+                if (!showAllMatches && list.size > 10) {
+                    val total = list.size
+                    list = list.take(10) + listOf(
+                        TopPlayer(SHOW_MORE_SENTINEL, "Show all $total matches →", "")
+                    )
+                }
             }
             "TEAM_STANDINGS" -> {
                 val minWins = binding.etMinWins.text?.toString()?.toIntOrNull()
@@ -294,6 +318,19 @@ class DetailedStatsAdapter(
         RecyclerView.ViewHolder(binding.root) {
 
         fun bind(player: TopPlayer, rank: Int) {
+            if (player.name == "__MORE__") {
+                binding.tvRank.text          = ""
+                binding.tvPlayerName.text    = ""
+                binding.tvPlayerValue.text   = player.value
+                binding.tvPlayerDetails.text = ""
+                binding.tvPlayerValue.gravity = android.view.Gravity.CENTER
+                binding.tvPlayerValue.setTextColor(
+                    binding.root.context.getColor(R.color.purple_700)
+                )
+                binding.tvPlayerValue.textSize = 13f
+                binding.root.setOnClickListener { onItemClick(player) }
+                return
+            }
             binding.tvRank.text        = rank.toString()
             binding.tvPlayerName.text  = player.name
             binding.tvPlayerValue.text = player.value
